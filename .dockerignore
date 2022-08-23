@@ -1,0 +1,13 @@
+**/*.sw[op]
+**/*.git
+**/.vscode
+
+Dockerfile
+**/.dockerignore
+
+bin/
+**/*.db
+**/*_test.go
+
+**/.DS_Store
+**/.envrc

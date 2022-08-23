@@ -1,0 +1,7 @@
+basePath: /v1alpha1
+info:
+  contact: {}
+  title: SCAS
+  version: v1alpha1
+paths: {}
+swagger: "2.0"

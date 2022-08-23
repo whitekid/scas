@@ -1,0 +1,18 @@
+@startuml
+Client -> Server: [order] Signature
+Server -> Client: Acquired authorizations
+Client -> Server: [responses] Signature
+
+== validation ==
+Client -> Server: [CSR] Signature
+Server -> Client: Acknowledge
+
+== await issurance ==
+Client -> Server: [POST-as-GET request] signature
+Server -> Client: Certificate
+
+== revoke ==
+Client -> Server: [Revocation request] Signature
+Server -> Client: Result
+
+@enduml
