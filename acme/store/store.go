@@ -6,6 +6,7 @@ import (
 
 	acmeclient "scas/client/acme"
 	"scas/client/common"
+	"scas/client/common/x509types"
 )
 
 type Interface interface {
@@ -40,6 +41,9 @@ type Interface interface {
 	CreateCertificate(ctx context.Context, cert *Certificate) (*Certificate, error)
 	ListCertificate(ctx context.Context, opts ListCertificateOpts) ([]*Certificate, error)
 	GetCertificate(ctx context.Context, certID string) (*Certificate, error)
+	// Get certificate by certificate sha256 digest of der format
+	GetCertificateBySum(ctx context.Context, sum string) (*Certificate, error)
+	RevokeCertificate(ctx context.Context, certID string, reason x509types.RevokeReason) (*Certificate, error)
 }
 
 const (
@@ -78,7 +82,10 @@ type Challenge struct {
 }
 
 type Certificate struct {
-	ID      string `validate:"eq="`
-	OrderID string `validate:"required"`
-	Chain   []byte `validate:"required"`
+	ID           string `validate:"eq="`
+	OrderID      string `validate:"required"`
+	Chain        []byte `validate:"required"` // certificate chain PEM format
+	Hash         string
+	RevokeReason x509types.RevokeReason
+	RevokedAt    *common.Timestamp
 }

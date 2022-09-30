@@ -18,10 +18,11 @@ type Manager struct {
 
 // New create new acme manager
 func New(store store.Interface) *Manager {
-	return &Manager{
-		store:      store,
-		challenger: newChallenger(store),
+	m := &Manager{
+		store: store,
 	}
+	m.challenger = newChallenger(m, store)
+	return m
 }
 
 func (m *Manager) SetTermUpdated(t time.Time) { m.termUpdatedAt = t }

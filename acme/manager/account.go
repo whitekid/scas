@@ -2,7 +2,6 @@ package manager
 
 import (
 	"context"
-	"crypto"
 	"crypto/ecdsa"
 	"crypto/x509"
 	"encoding/base64"
@@ -14,6 +13,7 @@ import (
 
 	"scas/acme/store"
 	acmeclient "scas/client/acme"
+	"scas/pkg/helper"
 	"scas/pkg/helper/x509x"
 )
 
@@ -128,7 +128,7 @@ func (m *Manager) VerifySignature(ctx context.Context, key string, kid string, s
 		return store.ErrBadPublicKey
 	}
 
-	hash := crypto.SHA256.New().Sum([]byte(fmt.Sprintf("%s.%s", header, payload)))
+	hash := helper.SHA256Sum([]byte(fmt.Sprintf("%s.%s", header, payload)))
 	sig, err := base64.RawURLEncoding.DecodeString(signature)
 	if err != nil {
 		return errors.Wrap(err, "signature decode failed")

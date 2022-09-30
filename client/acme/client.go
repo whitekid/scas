@@ -2,7 +2,6 @@ package acme
 
 import (
 	"context"
-	"crypto"
 	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/x509"
@@ -17,6 +16,7 @@ import (
 	"github.com/whitekid/goxp/request"
 
 	"scas/client/common"
+	"scas/pkg/helper"
 	"scas/pkg/helper/x509x"
 )
 
@@ -87,7 +87,7 @@ func WithClient(endpoint string, key []byte, client *http.Client) (*Client, erro
 }
 
 // Thumbprint returns thumbprint of public key
-func (c *Client) Thumbprint() []byte { return crypto.SHA256.New().Sum(c.pub) }
+func (c *Client) Thumbprint() []byte { return helper.SHA256Sum(c.pub) }
 
 type Directory struct {
 	NewNonce   string `json:"newNonce"`
@@ -188,7 +188,7 @@ func (c *Client) newJOSERequest(url string, payload interface{}, priv x509x.Priv
 	}
 	req.Protected = base64.RawURLEncoding.EncodeToString(protected)
 
-	signature, err := priv.Sign(rand.Reader, crypto.SHA256.New().Sum([]byte(fmt.Sprintf("%s.%s", req.Protected, req.Payload))), nil)
+	signature, err := priv.Sign(rand.Reader, helper.SHA256Sum([]byte(fmt.Sprintf("%s.%s", req.Protected, req.Payload))), nil)
 	if err != nil {
 		return nil, errors.Wrapf(err, "fail to sign payload")
 	}

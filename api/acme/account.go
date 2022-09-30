@@ -23,12 +23,8 @@ func (s *Server) newAccount(c echo.Context) error {
 	cc := c.(*Context)
 
 	req := &acmeclient.AccountRequest{}
-	if err := json.Unmarshal(cc.payload, req); err != nil {
-		return errors.Wrap(store.ErrJOSEHeaderDecodeFail, err.Error())
-	}
-
-	if err := helper.ValidateStruct(req); err != nil {
-		return errors.Wrap(store.ErrJOSEHeaderDecodeFail, err.Error())
+	if err := s.parseJOSEPayload(c, req); err != nil {
+		return err
 	}
 
 	if err := s.validateAccountRequest(req); err != nil {

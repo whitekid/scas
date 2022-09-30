@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/hex"
 	"time"
 
 	"github.com/pkg/errors"
@@ -15,6 +16,8 @@ import (
 	"scas/acme/store"
 	acmeclient "scas/client/acme"
 	"scas/client/common"
+	"scas/client/common/x509types"
+	"scas/pkg/helper"
 	"scas/pkg/helper/x509x"
 )
 
@@ -116,7 +119,7 @@ func (m *Manager) FinalizeOrder(ctx context.Context, orderID string, csr *x509.C
 	parentPrivateKey := privateKey
 
 	template := &x509.Certificate{
-		SerialNumber:    x509x.RandSerial(),
+		SerialNumber:    x509x.RandomSerial(),
 		Subject:         csr.Subject,
 		Extensions:      csr.Extensions,
 		ExtraExtensions: csr.ExtraExtensions,
@@ -165,5 +168,32 @@ func (m *Manager) GetCertificate(ctx context.Context, certID string) (*store.Cer
 		return nil, err
 	}
 
+	if cert.RevokedAt != nil {
+		return nil, store.ErrAlreadyRevoked
+	}
+
 	return cert, nil
+}
+
+// RevokeCertificate revoke certificate
+// cert der format certificate
+func (m *Manager) RevokeCertificate(ctx context.Context, certDer []byte, reason x509types.RevokeReason) error {
+	if reason.String() == "" {
+		return store.ErrBadRevocationReason
+	}
+
+	cert, err := m.store.GetCertificateBySum(ctx, hex.EncodeToString(helper.SHA256Sum(certDer)))
+	if err != nil {
+		return err
+	}
+
+	if cert.RevokedAt != nil {
+		return store.ErrAlreadyRevoked
+	}
+
+	if _, err := m.store.RevokeCertificate(ctx, cert.ID, reason); err != nil {
+		return err
+	}
+
+	return nil
 }

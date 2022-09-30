@@ -129,7 +129,6 @@ func (svc *AccountService) KeyChange(ctx context.Context) error {
 		return errors.Wrapf(err, "fail to request key change")
 	}
 
-	log.Debugf("@@@@ request key change with new pub key: %s", base64.RawURLEncoding.EncodeToString(svc.client.pub))
 	resp, err := svc.client.sendJOSERequest(ctx, http.MethodPost, svc.client.directory.KeyChange, payload)
 	if err != nil {
 		return errors.Wrapf(err, "fail to request key change")

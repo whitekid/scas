@@ -8,7 +8,6 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
-	"github.com/whitekid/goxp/log"
 	"github.com/whitekid/goxp/request"
 
 	"scas/acme/store"
@@ -84,8 +83,6 @@ func TestError(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-
-			log.Debugf("@@@@ ErrIncorrectResponse.Detail=%s", store.ErrIncorrectResponse.Detail)
 
 			ts := newTestServer(ctx, t)
 			ts.handler.(*helper.Echo).POST("/error", func(c echo.Context) error { return tt.args.err }, ts.server.errorHandler)

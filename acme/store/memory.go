@@ -11,6 +11,7 @@ import (
 
 	acmeclient "scas/client/acme"
 	"scas/client/common"
+	"scas/client/common/x509types"
 	"scas/pkg/helper"
 )
 
@@ -263,6 +264,14 @@ func (store *memoryStoreImpl) GetCertificate(ctx context.Context, ID string) (*C
 		return nil, ErrCertNotFound
 	}
 	return cert, nil
+}
+
+func (store *memoryStoreImpl) GetCertificateBySum(ctx context.Context, certID string) (*Certificate, error) {
+	panic("Not Implemented")
+}
+
+func (store *memoryStoreImpl) RevokeCertificate(ctx context.Context, certID string, reason x509types.RevokeReason) (*Certificate, error) {
+	panic("Not Implemented")
 }
 
 func (store *memoryStoreImpl) CreateChallenge(ctx context.Context, chal *Challenge) (*Challenge, error) {

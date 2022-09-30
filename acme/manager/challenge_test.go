@@ -2,7 +2,6 @@ package manager
 
 import (
 	"context"
-	"crypto"
 	"encoding/base64"
 	"fmt"
 	"os"
@@ -19,6 +18,7 @@ import (
 	"scas/acme/store"
 	acmeclient "scas/client/acme"
 	"scas/client/common"
+	"scas/pkg/helper"
 	"scas/pkg/testutils"
 )
 
@@ -108,7 +108,9 @@ func TestChallenger(t *testing.T) {
 
 			s := setupFixture(ctx, t)
 
-			challenger := newChallenger(s)
+			m := New(s.Interface)
+			challenger := newChallenger(m, s.Interface)
+
 			errCh := make(chan error)
 			defer close(errCh)
 
@@ -122,11 +124,11 @@ func TestChallenger(t *testing.T) {
 			pub, _ := base64.RawURLEncoding.DecodeString(acct.Key)
 			switch tt.args.challengeType {
 			case acmeclient.ChallengeHTTP01:
-				chalServer := testutils.NewChallengeServer(chal.Token, crypto.SHA256.New().Sum(pub))
+				chalServer := testutils.NewChallengeServer(chal.Token, helper.SHA256Sum(pub))
 				defer chalServer.Close()
 				os.Setenv("CHALLENGE_HTTP01_SERVER_PORT", chalServer.Port)
 			case acmeclient.ChallengeDNS01:
-				s := newTestDNSServer(ctx, [][]string{{"_acme-challenge." + authz.Identifier.Value, base64.RawURLEncoding.EncodeToString(crypto.SHA256.New().Sum(pub))}})
+				s := newTestDNSServer(ctx, [][]string{{"_acme-challenge." + authz.Identifier.Value, base64.RawURLEncoding.EncodeToString(helper.SHA256Sum(pub))}})
 				os.Setenv("CHALLENGE_DNS01_SERVER_ADDR", s.addr)
 				defer os.Unsetenv("CHALLENGE_DNS01_SERVER_ADDR")
 			}
@@ -165,7 +167,9 @@ func TestChallengeRetry(t *testing.T) {
 
 			s := setupFixture(ctx, t)
 
-			challenger := newChallenger(s)
+			m := New(s.Interface)
+			challenger := newChallenger(m, s.Interface)
+
 			errCh := make(chan error)
 			defer close(errCh)
 
@@ -183,7 +187,7 @@ func TestChallengeRetry(t *testing.T) {
 
 			// request again challenge
 			pub, _ := base64.RawURLEncoding.DecodeString(s.acct.Key)
-			chalServer := testutils.NewChallengeServer(chal.Token, crypto.SHA256.New().Sum(pub))
+			chalServer := testutils.NewChallengeServer(chal.Token, helper.SHA256Sum(pub))
 			defer chalServer.Close()
 			os.Setenv("CHALLENGE_HTTP01_SERVER_PORT", chalServer.Port)
 

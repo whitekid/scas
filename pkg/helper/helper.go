@@ -2,6 +2,7 @@ package helper
 
 import (
 	"context"
+	"crypto"
 	"strconv"
 	"time"
 
@@ -32,4 +33,10 @@ func After(ctx context.Context, d time.Duration, fn func()) {
 	case <-time.After(d):
 		fn()
 	}
+}
+
+func SHA256Sum(data []byte) []byte {
+	h := crypto.SHA256.New()
+	h.Write(data)
+	return h.Sum(nil)
 }

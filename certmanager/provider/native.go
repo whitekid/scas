@@ -69,7 +69,7 @@ func (na *nativeImpl) CreateCertificate(ctx context.Context, req *CreateRequest,
 	goxp.IfThen(req.PostalCode != "", func() { template.Subject.PostalCode = []string{req.PostalCode} })
 
 	if req.SerialNumber == "" {
-		template.SerialNumber = x509x.RandSerial()
+		template.SerialNumber = x509x.RandomSerial()
 	} else {
 		serial, ok := template.SerialNumber.SetString(req.SerialNumber, 10)
 		if !ok {

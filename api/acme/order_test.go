@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"scas/acme/manager"
 	acmeclient "scas/client/acme"
 	"scas/client/common"
 	"scas/pkg/testutils"
@@ -15,13 +16,16 @@ import (
 
 type fixture struct {
 	*acmeclient.Client
-	acct  *acmeclient.Account
-	order *acmeclient.Order
+	manager *manager.Manager
+	acct    *acmeclient.Account
+	order   *acmeclient.Order
 }
 
 func setupFixture(ctx context.Context, t *testing.T) *fixture {
 	priv := generateKey(t)
-	client := testutils.Must1(acmeclient.New(newTestServer(ctx, t).URL, priv))
+
+	server := newTestServer(ctx, t)
+	client := testutils.Must1(acmeclient.New(server.URL, priv))
 
 	acct := testutils.Must1(client.NewAccount(ctx, &acmeclient.AccountRequest{Contact: []string{"mailto:hello@example.com"}}))
 	order := testutils.Must1(client.NewOrder(ctx, &acmeclient.OrderRequest{
@@ -31,9 +35,10 @@ func setupFixture(ctx context.Context, t *testing.T) *fixture {
 	}))
 
 	return &fixture{
-		Client: client,
-		acct:   acct,
-		order:  order,
+		Client:  client,
+		manager: server.server.manager,
+		acct:    acct,
+		order:   order,
 	}
 }
 

@@ -119,7 +119,7 @@ func TestScenario(t *testing.T) {
 	finalizedOrder, err := client.Order(order.Finalize).Finalize(ctx, &x509.CertificateRequest{
 		Subject: pkix.Name{
 			CommonName:   "test.charlie.127.0.0.1.sslip.io",
-			SerialNumber: x509x.RandSerial().String(),
+			SerialNumber: x509x.RandomSerial().String(),
 		},
 		DNSNames: []string{"test.charlie.127.0.0.1.sslip.io"},
 	})
@@ -129,15 +129,13 @@ func TestScenario(t *testing.T) {
 	require.NotEmpty(t, finalizedOrder.Certificate)
 
 	// download certificate
-	chain, err := client.Cert(finalizedOrder.Certificate).Get(ctx)
+	chain, err := client.Certificate(finalizedOrder.Certificate).Get(ctx)
 	require.NoError(t, err)
-	require.NotEqual(t, 0, len(chain))
-	for _, cert := range chain {
-		x509cert, err := x509x.ParseCertificate(cert)
-		require.NoError(t, err)
-		require.Equal(t, []string{"test.charlie.127.0.0.1.sslip.io"}, x509cert.DNSNames)
-		require.Equal(t, "test.charlie.127.0.0.1.sslip.io", x509cert.Subject.CommonName)
-		require.Equal(t, notBefore.Time, x509cert.NotBefore)
-		require.Equal(t, notAfter.Time, x509cert.NotAfter)
-	}
+	require.NotEmpty(t, chain)
+	x509cert, err := x509x.ParseCertificate(chain)
+	require.NoError(t, err)
+	require.Equal(t, []string{"test.charlie.127.0.0.1.sslip.io"}, x509cert.DNSNames)
+	require.Equal(t, "test.charlie.127.0.0.1.sslip.io", x509cert.Subject.CommonName)
+	require.Equal(t, notBefore.Time, x509cert.NotBefore)
+	require.Equal(t, notAfter.Time, x509cert.NotAfter)
 }

@@ -91,8 +91,6 @@ func TestFindAccountByKey(t *testing.T) {
 }
 
 func TestUpdateAccount(t *testing.T) {
-	priv := generateKey(t)
-
 	type args struct {
 		contact string
 	}
@@ -110,6 +108,7 @@ func TestUpdateAccount(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
+			priv := generateKey(t)
 			client := testutils.Must1(acmeclient.New(newTestServer(ctx, t).URL, priv))
 
 			acct, err := client.NewAccount(ctx, &acmeclient.AccountRequest{Contact: []string{"mailto:hello@example.com"}})

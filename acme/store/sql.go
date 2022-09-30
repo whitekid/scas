@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"strings"
 	"time"
@@ -10,12 +11,14 @@ import (
 	"github.com/pkg/errors"
 	"github.com/whitekid/goxp"
 	"github.com/whitekid/goxp/fx"
+	"github.com/whitekid/goxp/log"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 
 	"scas/acme/store/models"
 	acmeclient "scas/client/acme"
 	"scas/client/common"
+	"scas/client/common/x509types"
 	"scas/pkg/helper"
 	"scas/pkg/helper/gormx"
 )
@@ -87,16 +90,15 @@ func (s *sqlStoreImpl) CreateAccount(ctx context.Context, acct *Account) (*Accou
 		return nil, gormx.ConvertSQLError(tx.Error)
 	}
 
-	return accountFromModel(acctRef), nil
+	return modelsToAccount(acctRef), nil
 }
 
-func accountFromModel(acct *models.Account) *Account {
+func modelsToAccount(acct *models.Account) *Account {
 	return &Account{
 		AccountResource: acmeclient.AccountResource{
 			Status:              acmeclient.AccountStatus(acct.Status),
 			Contact:             fx.Ternary(len(acct.Contacts) > 0, strings.Split(acct.Contacts, ","), nil),
 			TermOfServiceAgreed: acct.TermOfServiceAgreed,
-			// ExternalAccountBinding: struct{}{},// TODO
 		},
 		ID:          acct.ID,
 		Key:         acct.Key,
@@ -115,7 +117,7 @@ func (s *sqlStoreImpl) ListAccount(ctx context.Context, opts ListAccountOpts) ([
 		return nil, err
 	}
 
-	return fx.Map(accts, func(acct *models.Account) *Account { return accountFromModel(acct) }), nil
+	return fx.Map(accts, func(acct *models.Account) *Account { return modelsToAccount(acct) }), nil
 }
 
 func (s *sqlStoreImpl) listAccount(ctx context.Context, opts ListAccountOpts) ([]*models.Account, error) {
@@ -138,7 +140,7 @@ func (s *sqlStoreImpl) GetAccount(ctx context.Context, acctID string) (*Account,
 		return nil, err
 	}
 
-	return accountFromModel(acct), nil
+	return modelsToAccount(acct), nil
 }
 
 func (s *sqlStoreImpl) getAccount(ctx context.Context, acctID string) (*models.Account, error) {
@@ -191,7 +193,7 @@ func (s *sqlStoreImpl) updateAccount(ctx context.Context, acctID string, fn func
 		return nil, tx.Error
 	}
 
-	return accountFromModel(acct), nil
+	return modelsToAccount(acct), nil
 }
 
 func (s *sqlStoreImpl) UpdateAccountContact(ctx context.Context, acctID string, contacts []string) (*Account, error) {
@@ -667,6 +669,7 @@ func (s *sqlStoreImpl) UpdateChallengeError(ctx context.Context, chalID string, 
 type ListCertificateOpts struct {
 	ID      string
 	OrderID string
+	Hash    string // sha256 sum of certificate
 }
 
 func (s *sqlStoreImpl) ListCertificate(ctx context.Context, opts ListCertificateOpts) ([]*Certificate, error) {
@@ -680,7 +683,9 @@ func (s *sqlStoreImpl) ListCertificate(ctx context.Context, opts ListCertificate
 
 func (s *sqlStoreImpl) listCertificate(ctx context.Context, opts ListCertificateOpts) ([]*models.Certificate, error) {
 	w := &models.Certificate{
-		ID: opts.ID,
+		ID:      opts.ID,
+		OrderID: opts.OrderID,
+		Hash:    opts.Hash,
 	}
 
 	var results []*models.Certificate
@@ -693,9 +698,12 @@ func (s *sqlStoreImpl) listCertificate(ctx context.Context, opts ListCertificate
 
 func modelsToCertificate(cert *models.Certificate) *Certificate {
 	return &Certificate{
-		ID:      cert.ID,
-		Chain:   cert.Chain,
-		OrderID: cert.OrderID,
+		ID:           cert.ID,
+		Chain:        cert.Chain,
+		OrderID:      cert.OrderID,
+		Hash:         cert.Hash,
+		RevokeReason: x509types.StrToRevokeReason(cert.RevokeReason),
+		RevokedAt:    common.NewTimestampP(cert.RevokedAt),
 	}
 }
 
@@ -735,11 +743,48 @@ func (s *sqlStoreImpl) CreateCertificate(ctx context.Context, cert *Certificate)
 		ID:      shortuuid.New(),
 		Chain:   cert.Chain,
 		OrderID: cert.OrderID,
+		Hash:    hex.EncodeToString(helper.SHA256Sum(cert.Chain)),
 	}
-
 	if tx := s.db.WithContext(ctx).Save(ref); tx.Error != nil {
 		return nil, gormx.ConvertSQLError(tx.Error)
 	}
 
 	return modelsToCertificate(ref), nil
+}
+
+func (s *sqlStoreImpl) GetCertificateBySum(ctx context.Context, hash string) (*Certificate, error) {
+	log.Debugf("GetCertificateBySum(): sum=%s, len=%d", hash, len(hash))
+
+	certs, err := s.ListCertificate(ctx, ListCertificateOpts{
+		Hash: hash,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	switch len(certs) {
+	case 0:
+		return nil, ErrCertNotFound
+	case 1:
+		return certs[0], nil
+	default:
+		return nil, ErrMultipleRecords
+	}
+}
+
+func (s *sqlStoreImpl) RevokeCertificate(ctx context.Context, certID string, reason x509types.RevokeReason) (*Certificate, error) {
+	cert, err := s.getCertificate(ctx, certID)
+	if err != nil {
+		return nil, err
+	}
+
+	cert.RevokeReason = reason.String()
+	t := time.Now().UTC()
+	cert.RevokedAt = &t
+
+	if tx := s.db.Save(cert); tx.Error != nil {
+		return nil, tx.Error
+	}
+
+	return modelsToCertificate(cert), nil
 }

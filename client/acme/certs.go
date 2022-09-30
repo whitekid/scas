@@ -2,15 +2,17 @@ package acme
 
 import (
 	"context"
-	"encoding/pem"
+	"encoding/base64"
 	"io"
 	"net/http"
+
+	"scas/client/common/x509types"
 
 	"github.com/pkg/errors"
 )
 
-// Cert represents certificate services
-func (client *Client) Cert(endpoint string) *CertService {
+// Certificate represents certificate services
+func (client *Client) Certificate(endpoint string) *CertService {
 	return &CertService{
 		client:   client,
 		endpoint: endpoint,
@@ -22,7 +24,8 @@ type CertService struct {
 	endpoint string
 }
 
-func (svc *CertService) Get(ctx context.Context) ([][]byte, error) {
+// Get get certificate as PEM format
+func (svc *CertService) Get(ctx context.Context) ([]byte, error) {
 	resp, err := svc.client.sendJOSERequest(ctx, http.MethodPost, svc.endpoint, nil)
 	if err != nil {
 		return nil, errors.Wrapf(err, "fail to request download certificate")
@@ -34,15 +37,23 @@ func (svc *CertService) Get(ctx context.Context) ([][]byte, error) {
 		return nil, errors.Wrapf(err, "fail to request download certificate")
 	}
 
-	chain := make([][]byte, 0)
-	rest := body
-	for {
-		block, res := pem.Decode(rest)
-		if block == nil {
-			break
-		}
-		chain = append(chain, block.Bytes)
-		rest = res
+	return body, nil
+}
+
+type CertificateRevoke struct {
+	Certificate string `json:"certificate" validate:"required"` // base64 encoded der format
+	Reason      int    `json:"reason"`
+}
+
+func (svc *CertService) Revoke(ctx context.Context, certPEM []byte, reason x509types.RevokeReason) error {
+	_, err := svc.client.sendJOSERequest(ctx, http.MethodPost, svc.client.directory.RevokeCert,
+		&CertificateRevoke{
+			Certificate: base64.RawURLEncoding.EncodeToString(certPEM),
+			Reason:      int(reason),
+		})
+	if err != nil {
+		return err
 	}
-	return chain, nil
+
+	return nil
 }

@@ -276,7 +276,7 @@ func ExtKeyUsageToStr(keyUsage []x509.ExtKeyUsage) (usages []string) {
 	return usages
 }
 
-func RandSerial() *big.Int {
+func RandomSerial() *big.Int {
 	s, _ := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
 	return s
 }

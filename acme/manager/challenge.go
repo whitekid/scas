@@ -2,7 +2,6 @@ package manager
 
 import (
 	"context"
-	"crypto"
 	"encoding/base64"
 	"fmt"
 	"net"
@@ -60,20 +59,72 @@ func (m *Manager) StartChallengeLoop(ctx context.Context, errCh chan<- error) {
 	m.challenger.Start(ctx, errCh)
 }
 
+func (m *Manager) UpdateChallengeStatus(ctx context.Context, chalID string, authzID string, status acmeclient.ChallengeStatus) error {
+	authz, err := m.store.GetAuthz(ctx, authzID)
+	if err != nil {
+		return err
+	}
+
+	if _, err := m.store.UpdateChallengeStatus(ctx, chalID, acmeclient.ChallengeStatusValid, common.TimestampNow()); err != nil {
+		return err
+	}
+
+	// check all challenges were verified
+	challenges, err := m.store.ListChallenges(ctx, store.ListChallengesOpts{
+		AuthzID: authzID,
+		Status:  acmeclient.ChallengeStatusValid,
+	})
+	if err != nil {
+		return err
+	}
+	if len(authz.Challenges) == len(challenges) {
+		log.Infof("all challenge for authz %s was verified", authzID)
+		m.store.UpdateAuthzStatus(ctx, authz.ID, acmeclient.AuthzStatusValid)
+	}
+
+	// check all authorization were verified
+	allValid := true
+	order, err := m.store.GetOrder(ctx, authz.OrderID)
+	if err != nil {
+		return err
+	}
+
+	for _, authURI := range order.Authz {
+		auth, err := m.store.GetAuthz(ctx, idFromURI(authURI))
+		if err != nil {
+			panic("authorization was removed... may be expired!")
+		}
+		if auth.Status != acmeclient.AuthzStatusValid {
+			allValid = false
+			break
+		}
+	}
+
+	if allValid {
+		log.Infof("all authorization for order %s were verified, turn to ready status", order.ID)
+		if _, err := m.store.UpdateOrderStatus(ctx, order.ID, acmeclient.OrderStatusReady); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 type challengeInfo struct {
 	challengeID string
 	authzID     string
 }
 
 type Challenger struct {
-	store store.Interface
+	manager *Manager
+	store   store.Interface // Depreciated please remove this
 
 	enqueue func(challengeID string, authzID string)
 }
 
-func newChallenger(store store.Interface) *Challenger {
+func newChallenger(manager *Manager, store store.Interface) *Challenger {
 	return &Challenger{
-		store: store,
+		manager: manager,
+		store:   store,
 	}
 }
 
@@ -151,46 +202,8 @@ func (c *Challenger) challenge(ctx context.Context, challengeID string, authzID 
 		return errors.Errorf("Unsupported challenge type: %s", chal.Type)
 	}
 
-	if _, err := c.store.UpdateChallengeStatus(ctx, chal.ID, acmeclient.ChallengeStatusValid, common.TimestampNow()); err != nil {
+	if err := c.manager.UpdateChallengeStatus(ctx, chal.ID, authzID, acmeclient.ChallengeStatusValid); err != nil {
 		return err
-	}
-
-	// check all challenges were verified
-	challenges, err := c.store.ListChallenges(ctx, store.ListChallengesOpts{
-		AuthzID: authz.ID,
-		Status:  acmeclient.ChallengeStatusValid,
-	})
-	if err != nil {
-		return err
-	}
-	if len(authz.Challenges) == len(challenges) {
-		log.Infof("all challenge for authz %s was verified", chal.AuthzID)
-		c.store.UpdateAuthzStatus(ctx, authz.ID, acmeclient.AuthzStatusValid)
-	}
-
-	// check all authorization were verified
-	allValid := true
-	order, err := c.store.GetOrder(ctx, authz.OrderID)
-	if err != nil {
-		return err
-	}
-
-	for _, authURI := range order.Authz {
-		auth, err := c.store.GetAuthz(ctx, idFromURI(authURI))
-		if err != nil {
-			panic("authorization was removed... may be expired!")
-		}
-		if auth.Status != acmeclient.AuthzStatusValid {
-			allValid = false
-			break
-		}
-	}
-
-	if allValid {
-		log.Infof("all authorization for order %s were verified, turn to ready status", order.ID)
-		if _, err := c.store.UpdateOrderStatus(ctx, order.ID, acmeclient.OrderStatusReady); err != nil {
-			return err
-		}
 	}
 
 	return nil
@@ -245,7 +258,7 @@ func (c *Challenger) challangeHttp01(ctx context.Context, chal *store.Challenge,
 		return errors.Wrapf(err, "account key decode failed")
 	}
 
-	acctThumbprint := base64.RawURLEncoding.EncodeToString(crypto.SHA256.New().Sum(key))
+	acctThumbprint := base64.RawURLEncoding.EncodeToString(helper.SHA256Sum(key))
 	if thumbprint != acctThumbprint {
 		return errors.Wrapf(store.ErrIncorrectResponse, "signature mismatch: %s", thumbprint)
 	}
@@ -281,7 +294,7 @@ func (c *Challenger) challengeDns01(ctx context.Context, chal *store.Challenge, 
 		return errors.Wrapf(err, "account key decode failed")
 	}
 
-	digest := base64.RawURLEncoding.EncodeToString(crypto.SHA256.New().Sum(key))
+	digest := base64.RawURLEncoding.EncodeToString(helper.SHA256Sum(key))
 
 	if !fx.Contains(records, digest) {
 		log.Debugf("txt=%s, digest=%s", records, digest)

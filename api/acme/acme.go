@@ -74,8 +74,8 @@ func (s *Server) Route(e *echo.Group) {
 	e.GET("/orders/:order_id/finalize", s.malformed)
 	e.POST("/certs/:cert_id", s.getCert, customContext, s.parseJOSERequest, s.addNonce)
 	e.GET("/certs/:cert_id", s.malformed)
-	e.POST("/revokeCert", s.notImplemented, customContext, s.parseJOSERequest, s.addNonce)
-	e.GET("/revokeCert", s.malformed)
+	e.POST("/revoke-cert", s.revokeCert, customContext, s.parseJOSERequest, s.addNonce)
+	e.GET("/revoke-cert", s.malformed)
 	e.POST("/key-change", s.keyChange, customContext, s.parseJOSERequest, s.addNonce)
 	e.GET("/key-change", s.malformed)
 }

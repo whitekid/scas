@@ -90,7 +90,10 @@ type Challenge struct {
 type Certificate struct {
 	gorm.Model
 
-	ID      string `gorm:"primaryKey;size=36"`
-	OrderID string `gorm:"size=36" validate:"required"`
-	Chain   []byte `gorm:"not null" validate:"required"`
+	ID           string `gorm:"primaryKey;size=36"`
+	OrderID      string `gorm:"size=36" validate:"required"`
+	Chain        []byte `gorm:"not null" validate:"required"` // certificate chain
+	Hash         string `gorm:"not null"`
+	RevokeReason string `gorm:"size=64"`
+	RevokedAt    *time.Time
 }

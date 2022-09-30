@@ -92,19 +92,3 @@ func (s *Server) authorize(c echo.Context) error {
 		Wildcard: authz.Wildcard,
 	})
 }
-
-// getCert download certificate
-func (s *Server) getCert(c echo.Context) error {
-	cert, err := s.manager.GetCertificate(c.Request().Context(), c.Param("cert_id"))
-	if err != nil {
-		return errors.Wrap(err, "fail to get certificate")
-	}
-
-	c.Response().Header().Set(echo.HeaderContentType, "application/pem-certificate-chain")
-	c.Response().WriteHeader(http.StatusOK)
-
-	c.Response().Writer.Write(cert.Chain)
-	c.Response().Flush()
-
-	return nil
-}
