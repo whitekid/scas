@@ -25,12 +25,46 @@ const (
 	headerLocation = "Location"
 )
 
-// Client represents ACME client
+type Client struct {
+	endpoint string
+	client   *http.Client
+}
+
+func NewClient(endpoint string, client *http.Client) *Client {
+	return &Client{
+		endpoint: endpoint,
+		client:   client,
+	}
+}
+
+// ACME returns ACME service
+func (c *Client) ACME(endpoint string, key []byte) (*ACMEClient, error) {
+	return WithClient(endpoint, key, c.client)
+}
+
+func (c *Client) sendRequest(ctx context.Context, req *request.Request) (*request.Response, error) {
+	if c.client != nil {
+		req = req.WithClient(c.client)
+	}
+
+	resp, err := req.Do(ctx)
+	if err != nil {
+		return nil, errors.Wrapf(err, "request failed")
+	}
+
+	if !resp.Success() {
+		return nil, errors.Errorf("request failed with status %d", resp.StatusCode)
+	}
+
+	return resp, nil
+}
+
+// ACMEClient represents ACME client
 //
 // TODO integreated with scas client
 // TODO JWS authentication using account's private key
 // TODO error handling
-type Client struct {
+type ACMEClient struct {
 	endpoint  string
 	directory Directory
 	nonce     string
@@ -41,11 +75,11 @@ type Client struct {
 	pub     []byte // private, pub key pair in DER format
 }
 
-func New(endpoint string, key []byte) (*Client, error) {
+func New(endpoint string, key []byte) (*ACMEClient, error) {
 	return WithClient(endpoint, key, nil)
 }
 
-func WithClient(endpoint string, key []byte, client *http.Client) (*Client, error) {
+func WithClient(endpoint string, key []byte, client *http.Client) (*ACMEClient, error) {
 	var priv x509x.PrivateKey
 	var err error
 
@@ -68,7 +102,7 @@ func WithClient(endpoint string, key []byte, client *http.Client) (*Client, erro
 		return nil, errors.Wrapf(err, "fail to get public key")
 	}
 
-	c := &Client{
+	c := &ACMEClient{
 		endpoint: endpoint,
 		client:   client,
 		key:      priv,
@@ -90,7 +124,7 @@ func WithClient(endpoint string, key []byte, client *http.Client) (*Client, erro
 }
 
 // Thumbprint returns thumbprint of public key
-func (c *Client) Thumbprint() []byte { return helper.SHA256Sum(c.pub) }
+func (c *ACMEClient) Thumbprint() []byte { return helper.SHA256Sum(c.pub) }
 
 type Directory struct {
 	NewNonce   string `json:"newNonce"`
@@ -108,7 +142,7 @@ type Directory struct {
 
 const HeaderReplayNonce = "Replay-Nonce"
 
-func (c *Client) sendRequest(ctx context.Context, req *request.Request) (*request.Response, error) {
+func (c *ACMEClient) sendRequest(ctx context.Context, req *request.Request) (*request.Response, error) {
 	// TODO: client: ignore invalid reply-nonce values
 	resp, err := req.Do(ctx)
 	if err != nil {
@@ -158,7 +192,7 @@ func keyToAlgorithm(priv x509x.PrivateKey) string {
 	}
 }
 
-func (c *Client) newJOSERequest(url string, payload interface{}, priv x509x.PrivateKey, pub []byte) (*JOSERequest, error) {
+func (c *ACMEClient) newJOSERequest(url string, payload interface{}, priv x509x.PrivateKey, pub []byte) (*JOSERequest, error) {
 	req := &JOSERequest{}
 
 	if payload != nil {
@@ -200,16 +234,17 @@ func (c *Client) newJOSERequest(url string, payload interface{}, priv x509x.Priv
 	return req, nil
 }
 
-func (c *Client) sendJOSERequest(ctx context.Context, method string, url string, payload interface{}) (*request.Response, error) {
+func (c *ACMEClient) sendJOSERequest(ctx context.Context, method string, url string, payload interface{}) (*request.Response, error) {
 	req, err := c.newJOSERequest(url, payload, c.key, nil)
 	if err != nil {
 		return nil, err
 	}
 
+	// TODO with session
 	return c.sendRequest(ctx, request.New(method, url).ContentType("application/jose+json").JSON(req))
 }
 
-func (c *Client) getDirectory(ctx context.Context) error {
+func (c *ACMEClient) getDirectory(ctx context.Context) error {
 	resp, err := c.sendRequest(ctx, request.Get("%s/directory", c.endpoint))
 	if err != nil {
 		return errors.Wrapf(err, "fail to get directory")
@@ -225,7 +260,7 @@ func (c *Client) getDirectory(ctx context.Context) error {
 	return nil
 }
 
-func (c *Client) newNonce(ctx context.Context) error {
+func (c *ACMEClient) newNonce(ctx context.Context) error {
 	resp, err := c.sendRequest(ctx, request.Head(c.directory.NewNonce))
 	if err != nil {
 		return errors.Wrapf(err, "fail to acquire new nonce")
@@ -239,7 +274,7 @@ func (c *Client) newNonce(ctx context.Context) error {
 	return nil
 }
 
-func (c *Client) Nonce() string { return c.nonce }
+func (c *ACMEClient) Nonce() string { return c.nonce }
 
 // OrderList
 // Example

@@ -1,6 +1,7 @@
 package testutils
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"net/http"
@@ -16,7 +17,7 @@ type TestChallengeServer struct {
 	Port string
 }
 
-func NewChallengeServer(token string, thumbprint []byte) *TestChallengeServer {
+func NewChallengeServer(ctx context.Context, token string, thumbprint []byte) *TestChallengeServer {
 	challengeServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if !strings.HasPrefix(req.URL.Path, "/.well-known/acme-challenge/") {
 			w.WriteHeader(http.StatusNotFound)
@@ -36,6 +37,11 @@ func NewChallengeServer(token string, thumbprint []byte) *TestChallengeServer {
 	}))
 
 	u, _ := url.Parse(challengeServer.URL)
+
+	go func() {
+		<-ctx.Done()
+		challengeServer.Close()
+	}()
 
 	return &TestChallengeServer{
 		Server: challengeServer,

@@ -54,6 +54,8 @@ func Open(dburl string, opts ...gorm.Option) (*gorm.DB, error) {
 		}
 	}
 
+	db.Use(NewValidationPlugin())
+
 	return db, nil
 }
 
@@ -110,4 +112,12 @@ func newPgDialector(u *url.URL) gorm.Dialector {
 	})
 
 	return postgres.New(config)
+}
+
+func Count(tx *gorm.DB) int64 {
+	var c int64
+	if t := tx.Count(&c); t.Error != nil {
+		panic(t.Error)
+	}
+	return c
 }

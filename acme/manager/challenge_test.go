@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lithammer/shortuuid/v4"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/require"
 	"github.com/whitekid/goxp"
@@ -51,6 +50,8 @@ func setupFixture(ctx context.Context, t *testing.T) *Fixture {
 			OrderResource: acmeclient.OrderResource{
 				Status:      acmeclient.OrderStatusPending,
 				Identifiers: []common.Identifier{{Type: common.IdentifierDNS, Value: "hello.example.com.127.0.0.1.sslip.io"}},
+				NotBefore:   common.TimestampNow(),
+				NotAfter:    common.TimestampNow(),
 			},
 		},
 		AccountID: acct.ID,
@@ -71,9 +72,8 @@ func setupFixture(ctx context.Context, t *testing.T) *Fixture {
 
 		challenge, err = s.CreateChallenge(ctx, &store.Challenge{
 			Challenge: &acmeclient.Challenge{
-				Type:   acmeclient.ChallengeHTTP01,
+				Type:   acmeclient.ChallengeTypeHttp01,
 				Status: acmeclient.ChallengeStatusPending,
-				Token:  shortuuid.New(),
 			},
 			AuthzID: authz.ID,
 		})
@@ -98,8 +98,8 @@ func TestChallenger(t *testing.T) {
 		args    args
 		wantErr bool
 	}{
-		{`valid http01`, args{acmeclient.ChallengeHTTP01}, false},
-		{`valid dns01`, args{acmeclient.ChallengeDNS01}, false},
+		{`valid http01`, args{acmeclient.ChallengeTypeHttp01}, false},
+		{`valid dns01`, args{acmeclient.ChallengeTypeDns01}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -123,11 +123,10 @@ func TestChallenger(t *testing.T) {
 
 			pub, _ := base64.RawURLEncoding.DecodeString(acct.Key)
 			switch tt.args.challengeType {
-			case acmeclient.ChallengeHTTP01:
-				chalServer := testutils.NewChallengeServer(chal.Token, helper.SHA256Sum(pub))
-				defer chalServer.Close()
+			case acmeclient.ChallengeTypeHttp01:
+				chalServer := testutils.NewChallengeServer(ctx, chal.Token, helper.SHA256Sum(pub))
 				os.Setenv("CHALLENGE_HTTP01_SERVER_PORT", chalServer.Port)
-			case acmeclient.ChallengeDNS01:
+			case acmeclient.ChallengeTypeDns01:
 				s := newTestDNSServer(ctx, [][]string{{"_acme-challenge." + authz.Identifier.Value, base64.RawURLEncoding.EncodeToString(helper.SHA256Sum(pub))}})
 				os.Setenv("CHALLENGE_DNS01_SERVER_ADDR", s.addr)
 				defer os.Unsetenv("CHALLENGE_DNS01_SERVER_ADDR")
@@ -187,8 +186,7 @@ func TestChallengeRetry(t *testing.T) {
 
 			// request again challenge
 			pub, _ := base64.RawURLEncoding.DecodeString(s.acct.Key)
-			chalServer := testutils.NewChallengeServer(chal.Token, helper.SHA256Sum(pub))
-			defer chalServer.Close()
+			chalServer := testutils.NewChallengeServer(ctx, chal.Token, helper.SHA256Sum(pub))
 			os.Setenv("CHALLENGE_HTTP01_SERVER_PORT", chalServer.Port)
 
 			time.Sleep(challengeRetryInterval)

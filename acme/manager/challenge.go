@@ -69,14 +69,19 @@ func (m *Manager) UpdateChallengeStatus(ctx context.Context, chalID string, auth
 		return err
 	}
 
+	if status != acmeclient.ChallengeStatusValid {
+		return nil
+	}
+
 	// check all challenges were verified
 	challenges, err := m.store.ListChallenges(ctx, store.ListChallengesOpts{
 		AuthzID: authzID,
-		Status:  acmeclient.ChallengeStatusValid,
+		Status:  status,
 	})
 	if err != nil {
 		return err
 	}
+
 	if len(authz.Challenges) == len(challenges) {
 		log.Infof("all challenge for authz %s was verified", authzID)
 		m.store.UpdateAuthzStatus(ctx, authz.ID, acmeclient.AuthzStatusValid)
@@ -190,11 +195,11 @@ func (c *Challenger) challenge(ctx context.Context, challengeID string, authzID 
 	}
 
 	switch chal.Type {
-	case acmeclient.ChallengeHTTP01:
+	case acmeclient.ChallengeTypeHttp01:
 		if err := c.challangeHttp01(ctx, chal, authz); err != nil {
 			return err
 		}
-	case acmeclient.ChallengeDNS01:
+	case acmeclient.ChallengeTypeDns01:
 		if err := c.challengeDns01(ctx, chal, authz); err != nil {
 			return err
 		}

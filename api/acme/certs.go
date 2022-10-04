@@ -2,6 +2,7 @@ package acme
 
 import (
 	"encoding/base64"
+	"encoding/pem"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -10,10 +11,11 @@ import (
 	"scas/acme/store"
 	acmeclient "scas/client/acme"
 	"scas/client/common/x509types"
+	"scas/pkg/helper/x509x"
 )
 
 // getCert download certificate
-func (s *Server) getCert(c echo.Context) error {
+func (s *ACMEServer) getCert(c echo.Context) error {
 	cert, err := s.manager.GetCertificate(c.Request().Context(), c.Param("cert_id"))
 	if err != nil {
 		return errors.Wrap(err, "fail to get certificate")
@@ -28,19 +30,24 @@ func (s *Server) getCert(c echo.Context) error {
 	return nil
 }
 
-func (s *Server) revokeCert(c echo.Context) error {
+func (s *ACMEServer) revokeCert(c echo.Context) error {
 	var req acmeclient.CertificateRevoke
 	if err := s.parseJOSEPayload(c, &req); err != nil {
 		return err
 	}
 
-	certDer, err := base64.RawURLEncoding.DecodeString(req.Certificate)
+	certDER, err := base64.RawURLEncoding.DecodeString(req.Certificate)
 	if err != nil {
 		return errors.Wrapf(store.ErrMalformed, err.Error())
 	}
 
-	reason := x509types.RevokeReason(req.Reason)
-	if err := s.manager.RevokeCertificate(c.Request().Context(), certDer, reason); err != nil {
+	pemBytes := pem.EncodeToMemory(&pem.Block{
+		Type:    x509x.CertificatePEMBlockType,
+		Headers: nil,
+		Bytes:   certDER,
+	})
+
+	if err := s.manager.RevokeCertificate(c.Request().Context(), pemBytes, x509types.RevokeReason(req.Reason)); err != nil {
 		return err
 	}
 

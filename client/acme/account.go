@@ -26,7 +26,7 @@ import (
 //	  }
 type AccountResource struct {
 	Status                 AccountStatus `json:"status" validate:"required"`            // Valid, Deactivated, Revoked
-	Contact                []string      `json:"contact,omitempty" validate:"required"` // Contact informations
+	Contact                []string      `json:"contact,omitempty" validate:"required"` // Contact informations  
 	TermOfServiceAgreed    bool          `json:"termOfServiceAgreeded,omitempty"`
 	ExternalAccountBinding struct{}      `json:"externalAccountBinding,omitempty"`
 	Orders                 string        `json:"orders,omitempty"` // URL of orders
@@ -56,12 +56,12 @@ const (
 func (s AccountStatus) String() string { return string(s) }
 
 type AccountRequest struct {
-	Contact             []string `json:"contact,omitempty" validate:"required"`
+	Contact             []string `json:"contact,omitempty" validate:"required"` 
 	TermOfServiceAgreed bool     `json:"termOfServiceAgreed,omitempty"`
 	OnlyReturnExisting  bool     `json:"onlyReturnExisting,omitempty"`
 }
 
-func (client *Client) NewAccount(ctx context.Context, req *AccountRequest) (*Account, error) {
+func (client *ACMEClient) NewAccount(ctx context.Context, req *AccountRequest) (*Account, error) {
 	resp, err := client.sendJOSERequest(ctx, http.MethodPost, client.directory.NewAccount, req)
 	if err != nil {
 		return nil, errors.Wrapf(err, "fail to request new account")
@@ -77,7 +77,7 @@ func (client *Client) NewAccount(ctx context.Context, req *AccountRequest) (*Acc
 	return account, nil
 }
 
-func (client *Client) Account(endpoint string) *AccountService {
+func (client *ACMEClient) Account(endpoint string) *AccountService {
 	return &AccountService{
 		client:   client,
 		endpoint: endpoint,
@@ -85,7 +85,7 @@ func (client *Client) Account(endpoint string) *AccountService {
 }
 
 type AccountService struct {
-	client   *Client
+	client   *ACMEClient
 	endpoint string
 }
 

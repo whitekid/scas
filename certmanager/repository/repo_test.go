@@ -6,9 +6,7 @@ import (
 	"crypto/x509/pkix"
 	"math/big"
 	"net/http"
-	"net/url"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -36,32 +34,8 @@ const (
 	testServerCN    = "server.example.local.127.0.0.1.sslip.io"
 )
 
-func TestRepository(t *testing.T) {
-	type args struct {
-		dsn string
-	}
-	tests := [...]struct {
-		name    string
-		args    args
-		wantErr bool
-	}{
-		{`sqlite`, args{"sqlite://test.db"}, false},
-		// TODO: testing mysql, postgredql
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			testRepositoryWithDBURL(t, tt.args.dsn)
-		})
-	}
-}
-
-func TestRepositorySQLite(t *testing.T) { testRepositoryWithDBURL(t, "sqlite://test.db") }
-
-func testRepositoryWithDBURL(t *testing.T, dbURL string) {
-	if u, err := url.Parse(dbURL); err == nil && strings.HasPrefix(u.Scheme, "sqlite") {
-		os.Remove(u.Hostname())
-	}
-
+func TestRepository(t *testing.T) { testutils.ForEachSQLDriver(t, testRepository) }
+func testRepository(t *testing.T, dbURL string, resetFixture func()) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

@@ -14,6 +14,7 @@ import (
 	"scas/acme/store"
 	"scas/api/endpoints"
 	acmeclient "scas/client/acme"
+	"scas/pkg/helper"
 )
 
 // Server represents ACME server
@@ -22,6 +23,8 @@ import (
 type Server struct {
 	manager *manager.Manager
 	addr    string
+
+	acme *ACMEServer
 }
 
 var (
@@ -39,9 +42,11 @@ func (s *Server) PathAndName() (string, string) { return "/acme", "acme handler"
 type Context struct {
 	echo.Context
 
-	payload []byte
-	header  acmeclient.JOSEHeader
-	account *store.Account // current account information if requested with KID header
+	payload   []byte
+	header    acmeclient.JOSEHeader
+	account   *store.Account // current account information if requested with KID header
+	projectID string
+	project   *store.Project
 }
 
 func customContext(next echo.HandlerFunc) echo.HandlerFunc {
@@ -55,33 +60,49 @@ func customContext(next echo.HandlerFunc) echo.HandlerFunc {
 }
 
 func (s *Server) Route(e *echo.Group) {
+	e.Use(customContext)
 	e.Use(s.errorHandler)
 
-	e.GET("/directory", s.getDirectory)
-	e.HEAD("/new-nonce", s.newNonce, s.addNonce)
-	e.POST("/new-account", s.newAccount, customContext, s.parseJOSERequest, s.addNonce)
-	e.GET("/new-account", s.methodNotAllowed)
-	e.POST("/accounts/:acct_id", s.updateAccount, customContext, s.parseJOSERequest, s.checkValidAccount, s.addNonce)
-	e.GET("/accounts/:acct_id", s.methodNotAllowed)
-	e.POST("/accounts/:acct_id/orders", s.notImplemented, customContext, s.parseJOSERequest, s.checkValidAccount, s.addNonce)
-	e.GET("/accounts/:acct_id/orders", s.methodNotAllowed)
-	e.POST("/new-order", s.newOrder, customContext, s.parseJOSERequest, s.checkValidAccount, s.addNonce)
-	e.GET("/new-order", s.methodNotAllowed)
-	e.POST("/authz/:auth_id", s.authorize, customContext, s.parseJOSERequest, s.checkValidAccount, s.addNonce)
-	e.GET("/authz/:auth_id", s.methodNotAllowed)
-	e.POST("/challenges/:challenge_id", s.challenge, customContext, s.parseJOSERequest, s.checkValidAccount, s.addNonce)
-	e.GET("/challenges/:challenge_id", s.methodNotAllowed)
-	e.POST("/orders/:order_id/finalize", s.finalizeOrder, customContext, s.parseJOSERequest, s.checkValidAccount, s.addNonce)
-	e.GET("/orders/:order_id/finalize", s.methodNotAllowed)
-	e.POST("/certs/:cert_id", s.getCert, customContext, s.parseJOSERequest, s.checkValidAccount, s.addNonce)
-	e.GET("/certs/:cert_id", s.methodNotAllowed)
-	e.POST("/revoke-cert", s.revokeCert, customContext, s.parseJOSERequest, s.checkValidAccount, s.addNonce)
-	e.GET("/revoke-cert", s.methodNotAllowed)
-	e.POST("/key-change", s.keyChange, customContext, s.parseJOSERequest, s.checkValidAccount, s.addNonce)
-	e.GET("/key-change", s.methodNotAllowed)
+	extractProjectID := helper.ExtractParam("project_id", func(c echo.Context, val string) { c.(*Context).projectID = val })
+	e.Use(extractProjectID)
+
+	s.acme = &ACMEServer{
+		manager: s.manager,
+	}
+
+	e.POST("/", s.createProject)
+	e.GET("/:project_id", s.getProject, s.acme.checkValidProject)
+
+	// TODO addNonce는 Group으로
+	acme := e.Group("/acme/:project_id", extractProjectID, s.acme.checkValidProject)
+	acme.GET("/directory", s.acme.getDirectory)
+	acme.HEAD("/new-nonce", s.acme.newNonce, s.acme.addNonce)
+	acme.POST("/new-account", s.acme.newAccount, s.acme.parseJOSERequest, s.acme.addNonce)
+	acme.GET("/new-account", s.methodNotAllowed)
+	acme.POST("/accounts/:acct_id", s.acme.updateAccount, s.acme.parseJOSERequest, s.acme.checkValidAccount, s.acme.addNonce)
+	acme.GET("/accounts/:acct_id", s.methodNotAllowed)
+	acme.POST("/accounts/:acct_id/orders", s.notImplemented, s.acme.parseJOSERequest, s.acme.checkValidAccount, s.acme.addNonce)
+	acme.GET("/accounts/:acct_id/orders", s.methodNotAllowed)
+	acme.POST("/new-order", s.acme.newOrder, s.acme.parseJOSERequest, s.acme.checkValidAccount, s.acme.addNonce)
+	acme.GET("/new-order", s.methodNotAllowed)
+	acme.POST("/authz/:auth_id", s.acme.authorize, s.acme.parseJOSERequest, s.acme.checkValidAccount, s.acme.addNonce)
+	acme.GET("/authz/:auth_id", s.methodNotAllowed)
+	acme.POST("/challenges/:challenge_id", s.acme.challenge, s.acme.parseJOSERequest, s.acme.checkValidAccount, s.acme.addNonce)
+	acme.GET("/challenges/:challenge_id", s.methodNotAllowed)
+	acme.POST("/orders/:order_id/finalize", s.acme.finalizeOrder, s.acme.parseJOSERequest, s.acme.checkValidAccount, s.acme.addNonce)
+	acme.GET("/orders/:order_id/finalize", s.methodNotAllowed)
+	acme.POST("/certs/:cert_id", s.acme.getCert, s.acme.parseJOSERequest, s.acme.checkValidAccount, s.acme.addNonce)
+	acme.GET("/certs/:cert_id", s.methodNotAllowed)
+	acme.POST("/revoke-cert", s.acme.revokeCert, s.acme.parseJOSERequest, s.acme.checkValidAccount, s.acme.addNonce)
+	acme.GET("/revoke-cert", s.methodNotAllowed)
+	acme.POST("/key-change", s.acme.keyChange, s.acme.parseJOSERequest, s.acme.checkValidAccount, s.acme.addNonce)
+	acme.GET("/key-change", s.methodNotAllowed)
 }
 
-func (s *Server) Startup(ctx context.Context) {
+func (s *Server) Startup(ctx context.Context, addr string) {
+	s.addr = addr
+	s.acme.addr = addr + "/acme"
+
 	errCh := make(chan error)
 
 	go fx.CloseChan(ctx, errCh)
@@ -95,17 +116,22 @@ func (s *Server) Startup(ctx context.Context) {
 func (s *Server) notImplemented(c echo.Context) error   { panic("Not Implemented") }
 func (s *Server) methodNotAllowed(c echo.Context) error { return store.ErrMethodNotAllowed }
 
-func (s *Server) getDirectory(c echo.Context) error {
+type ACMEServer struct {
+	manager *manager.Manager
+	addr    string
+}
+
+func (s *ACMEServer) getDirectory(c echo.Context) error {
 	return c.JSON(http.StatusOK, &acmeclient.Directory{
-		NewNonce:                s.newNonceURL(),
-		NewAccount:              s.newAccountURL(),
-		NewOrder:                s.newOrderURL(),
-		NewAuthz:                s.newAuthzURL(),
-		RevokeCert:              s.revokeCertURL(),
-		KeyChange:               s.keyChangeURL(),
-		TermOfService:           s.termsURL(), // TODO
-		Website:                 s.websiteURL(),
-		CAAIdentities:           []string{"example.com"}, // TODO
-		ExternalAccountRequired: false,                   // TODO
+		NewNonce:                s.newNonceURL(c),
+		NewAccount:              s.newAccountURL(c),
+		NewOrder:                s.newOrderURL(c),
+		NewAuthz:                s.newAuthzURL(c),
+		RevokeCert:              s.revokeCertURL(c),
+		KeyChange:               s.keyChangeURL(c),
+		TermOfService:           s.termsURL(c),
+		Website:                 s.websiteURL(c),
+		CAAIdentities:           c.(*Context).project.CAAIdentities,
+		ExternalAccountRequired: c.(*Context).project.ExternalAccountRequired,
 	})
 }

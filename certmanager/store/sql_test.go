@@ -2,10 +2,6 @@ package store
 
 import (
 	"context"
-	"database/sql"
-	"fmt"
-	"os"
-	"strings"
 	"testing"
 
 	"github.com/pkg/errors"
@@ -53,41 +49,7 @@ const (
 	testPoolName    = "pool 1"
 )
 
-func newSQL(ctx context.Context, t *testing.T, scheme string) *testSQL {
-	dbname := testutils.DBName(t)
-	var dburl string
-
-	switch scheme {
-	case "sqlite":
-		os.Remove(dbname + ".db")
-		dburl = fmt.Sprintf("sqlite://%s.db", dbname)
-
-	case "mysql":
-		db, err := sql.Open("mysql", "root:@tcp(127.0.0.1:3306)/mysql")
-		require.NoError(t, err)
-		defer db.Close()
-
-		db.Exec("DROP DATABASE " + dbname)
-		_, err = db.Exec("CREATE DATABASE " + dbname)
-		require.NoError(t, err)
-
-		dburl = fmt.Sprintf("mysql://root:@127.0.0.1:3306/%s?parseTime=true", dbname)
-
-	case "pgsql":
-		db, err := sql.Open("pgx", "dbname=postgres")
-		require.NoError(t, err)
-		defer db.Close()
-
-		db.Exec("DROP DATABASE " + dbname)
-		_, err = db.Exec("CREATE DATABASE " + dbname)
-		require.NoError(t, err)
-
-		dburl = fmt.Sprintf("postgresql:///%s", dbname)
-
-	default:
-		require.Failf(t, "not supported scheme", scheme)
-	}
-
+func newSQL(ctx context.Context, t *testing.T, dburl string) *testSQL {
 	s := testSQL{sqlStoreImpl: NewSQL(dburl).(*sqlStoreImpl)}
 
 	project := testutils.Must1(s.createProject(ctx, testProjectID, testProjectName))
@@ -114,6 +76,10 @@ func newSQL(ctx context.Context, t *testing.T, scheme string) *testSQL {
 }
 
 func Test_sqlStoreImpl_listCertificate(t *testing.T) {
+	testutils.ForEachSQLDriver(t, test_sqlStoreImpl_listCertificate)
+}
+
+func test_sqlStoreImpl_listCertificate(t *testing.T, dburl string, resetFixture func()) {
 	type args struct {
 		opts CertificateListOpt
 	}
@@ -131,7 +97,8 @@ func Test_sqlStoreImpl_listCertificate(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			s := newSQL(ctx, t, "sqlite")
+			resetFixture()
+			s := newSQL(ctx, t, dburl)
 
 			got, err := s.listCertificate(ctx, s.projectID, s.caPoolID, tt.args.opts)
 			if (err != nil) != tt.wantErr {
@@ -149,27 +116,11 @@ func Test_sqlStoreImpl_listCertificate(t *testing.T) {
 	}
 }
 
-func forEachDriver(t *testing.T, testfn func(t *testing.T, driver string)) {
-	fx.ForEach([]string{"sqlite", "mysql", "pgsql"}, func(_ int, driver string) { forOneDriver(t, driver, testfn) })
-}
-
-func forOneDriver(t *testing.T, driver string, testfn func(t *testing.T, driver string)) {
-	t.Run(driver, func(t *testing.T) {
-		if os.Getenv("SCAS_SKIP_SQL_"+strings.ToUpper(driver)) == "true" {
-			t.Skip("skip driver " + driver)
-			return
-		}
-
-		testfn(t, driver)
-	})
-}
-
-// FIXME 영 맘에 안드네...
 func Test_sqlStoreImpl_CreateCAPool(t *testing.T) {
-	forEachDriver(t, test_sqlStoreImpl_CreateCAPool)
+	testutils.ForEachSQLDriver(t, test_sqlStoreImpl_CreateCAPool)
 }
 
-func test_sqlStoreImpl_CreateCAPool(t *testing.T, driver string) {
+func test_sqlStoreImpl_CreateCAPool(t *testing.T, dburl string, resetFixture func()) {
 	type args struct {
 		projectID  string
 		caPoolName string
@@ -188,7 +139,8 @@ func test_sqlStoreImpl_CreateCAPool(t *testing.T, driver string) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			s := newSQL(ctx, t, driver)
+			resetFixture()
+			s := newSQL(ctx, t, dburl)
 
 			projectID := fx.Ternary(tt.args.projectID == "", s.projectID, tt.args.projectID)
 

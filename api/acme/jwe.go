@@ -13,7 +13,7 @@ import (
 )
 
 // parseJOSERequest parse JWS and set payload
-func (s *Server) parseJOSERequest(next echo.HandlerFunc) echo.HandlerFunc {
+func (s *ACMEServer) parseJOSERequest(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		req := &acmeclient.JOSERequest{}
 
@@ -51,7 +51,7 @@ func (s *Server) parseJOSERequest(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
-func (s *Server) checkValidAccount(next echo.HandlerFunc) echo.HandlerFunc {
+func (s *ACMEServer) checkValidAccount(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		cc := c.(*Context)
 
@@ -71,8 +71,27 @@ func (s *Server) checkValidAccount(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
+func (s *ACMEServer) checkValidProject(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) (err error) {
+		cc := c.(*Context)
+
+		if cc.projectID == "" {
+			return echo.ErrNotFound
+		}
+
+		proj, err := s.manager.GetProject(c.Request().Context(), cc.projectID)
+		if err != nil {
+			return err
+		}
+
+		cc.project = proj
+
+		return next(c)
+	}
+}
+
 // parseJOSEPayload parse jose payload to struct and validate
-func (s *Server) parseJOSEPayload(c echo.Context, v interface{}) error {
+func (s *ACMEServer) parseJOSEPayload(c echo.Context, v interface{}) error {
 	cc := c.(*Context)
 
 	if err := json.Unmarshal(cc.payload, v); err != nil {

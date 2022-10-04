@@ -1,12 +1,15 @@
 @startuml ACME
-skinparam handwritten true
-
+skinparam handwritten false
 actor User as User
 participant Client
 boundary Server as Server
 queue "Challenge Queue" as ChallengeQueue
 actor "Challenge Server" as ChallengeServer
 boundary CA as CA
+
+== project setup ==
+Client -> Server: create project
+return acme endpoint
 
 == initialization ==
 Client -> Server: get directory
@@ -36,20 +39,34 @@ Server -> Server: create challenges
 Server -> ChallengeQueue: enqueue
 return response with status=pending
 loop challenge queue
+    activate ChallengeQueue
+    ChallengeQueue -> ChallengeQueue: update challenge status = processing
     ChallengeQueue -> ChallengeServer: challenge verification(http01, dns01)
-    ChallengeQueue -> Server: update challenge status
-    ChallengeQueue -> Server: update authorization status
+    alt chllenge verifify success
+        ChallengeQueue -> ChallengeQueue: update challenge status = valid
+        ChallengeQueue -> ChallengeQueue: update authorization status = valid
+        ChallengeQueue -> ChallengeQueue: update order status = ready
+    else verify failed
+        ChallengeQueue -> ChallengeQueue: update challenge status = invalid
+        ChallengeQueue -> ChallengeQueue: update authorization status = invalid
+        ChallengeQueue -> ChallengeQueue: retry challenge
+    end
+    deactivate ChallengeQueue
 end
-User -> ChallengeServer: set verification information
-loop until status==valid
-    Client -> Server: polling authorization status
-    Server --> Client: status
+User -> ChallengeServer: set verification information(manual setup)
+loop until order status = ready
+    Client -> Server: polling order status
+    return status
 end
 
 Client -> Server: finalize order
 activate Server
-Server -> CA: Issue certificate
-return
+    alt remote CA Server
+        Server -> CA: Issue certificate
+    else local CA
+        Server -> Server: Issue local 
+    end
+return 
 
 Client -> Server: download certificate
 activate Server
