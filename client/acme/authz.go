@@ -38,12 +38,16 @@ const (
 	ChallengeStatusInvalid    ChallengeStatus = "invalid"
 )
 
+func (s ChallengeStatus) String() string { return string(s) }
+
 type ChallengeType string
 
 const (
 	ChallengeHTTP01 ChallengeType = "http-01"
 	ChallengeDNS01  ChallengeType = "dns-01"
 )
+
+func (t ChallengeType) String() string { return string(t) }
 
 type Challenge struct {
 	Type      ChallengeType         `json:"type" validate:"required"`
@@ -75,6 +79,8 @@ const (
 	AuthzStatusExpired     AuthzStatus = "expired"
 	AuthzStatusRevoked     AuthzStatus = "revoked"
 )
+
+func (s AuthzStatus) String() string { return string(s) }
 
 func (svc *AuthzService) Get(ctx context.Context) (*Authz, error) {
 	resp, err := svc.client.sendJOSERequest(ctx, http.MethodPost, svc.endpoint, nil)

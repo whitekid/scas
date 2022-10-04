@@ -7,6 +7,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
 
+	"scas/acme/store"
 	acmeclient "scas/client/acme"
 	"scas/client/common/x509types"
 )
@@ -35,7 +36,7 @@ func (s *Server) revokeCert(c echo.Context) error {
 
 	certDer, err := base64.RawURLEncoding.DecodeString(req.Certificate)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		return errors.Wrapf(store.ErrMalformed, err.Error())
 	}
 
 	reason := x509types.RevokeReason(req.Reason)

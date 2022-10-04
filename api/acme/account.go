@@ -71,25 +71,46 @@ func (s *Server) updateAccount(c echo.Context) error {
 	log.Debugf("updateAccount()")
 
 	cc := c.(*Context)
+	acctID := c.Param("acct_id")
 
-	req := &acmeclient.AccountRequest{}
-	if err := s.parseJOSEPayload(c, req); err != nil {
-		return err
+	// TODO account deactive
+	// TODO reject deactivated account's request
+
+	var deactiveReq acmeclient.DeactiveRequest
+	if err := json.Unmarshal(cc.payload, &deactiveReq); err == nil && deactiveReq.Status != "" {
+		if err := helper.ValidateStruct(&deactiveReq); err != nil {
+			return err
+		}
+
+		if _, err := s.manager.DeactivateAccount(c.Request().Context(), acctID); err != nil {
+			return err
+		}
+
+		return nil
 	}
 
-	if err := s.validateAccountRequest(req); err != nil {
-		return err
+	var updateReq acmeclient.AccountRequest
+	if err := json.Unmarshal(cc.payload, &updateReq); err == nil {
+		if err := helper.ValidateStruct(&updateReq); err != nil {
+			return err
+		}
+
+		if err := s.validateAccountRequest(&updateReq); err != nil {
+			return err
+		}
+
+		acct, err := s.manager.UpdateAccount(c.Request().Context(), acctID, updateReq.Contact)
+		if err != nil {
+			return err
+		}
+
+		acct.Orders = s.accountOrderListURL(acct.ID)
+
+		c.Response().Header().Set(echo.HeaderLocation, s.accountURL(acct.ID))
+		return c.JSON(http.StatusOK, &acct.AccountResource)
 	}
 
-	acct, err := s.manager.UpdateAccount(c.Request().Context(), cc.Param("acct_id"), req.Contact)
-	if err != nil {
-		return err
-	}
-
-	acct.Orders = s.accountOrderListURL(acct.ID)
-
-	c.Response().Header().Set(echo.HeaderLocation, s.accountURL(acct.ID))
-	return c.JSON(http.StatusOK, &acct.AccountResource)
+	return store.ErrMalformed
 }
 
 func (s *Server) keyChange(c echo.Context) error {
@@ -130,7 +151,7 @@ func (s *Server) keyChange(c echo.Context) error {
 	}
 
 	// check inner signature
-	if err := s.manager.VerifySignature(c.Request().Context(), header.JWK, "", req.Signature, req.Protected, req.Payload); err != nil {
+	if _, err := s.manager.VerifySignature(c.Request().Context(), header.JWK, "", req.Signature, req.Protected, req.Payload); err != nil {
 		return err
 	}
 

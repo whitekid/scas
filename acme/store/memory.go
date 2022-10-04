@@ -132,6 +132,10 @@ func (store *memoryStoreImpl) UpdateAccountKey(ctx context.Context, acctID strin
 	panic("Not Implemented")
 }
 
+func (store *memoryStoreImpl) UpdateAccountStatus(ctx context.Context, acctID string, status acmeclient.AccountStatus) (*Account, error) {
+	panic("Not Implemented")
+}
+
 func (store *memoryStoreImpl) CreateOrder(ctx context.Context, order *Order) (*Order, error) {
 	store.ordersMU.Lock()
 	defer store.ordersMU.Unlock()

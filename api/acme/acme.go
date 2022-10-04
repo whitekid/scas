@@ -41,6 +41,7 @@ type Context struct {
 
 	payload []byte
 	header  acmeclient.JOSEHeader
+	account *store.Account // current account information if requested with KID header
 }
 
 func customContext(next echo.HandlerFunc) echo.HandlerFunc {
@@ -58,26 +59,26 @@ func (s *Server) Route(e *echo.Group) {
 
 	e.GET("/directory", s.getDirectory)
 	e.HEAD("/new-nonce", s.newNonce, s.addNonce)
-	e.POST("/new-account", s.newAccount, customContext, s.addNonce, s.parseJOSERequest)
-	e.GET("/new-account", s.malformed)
-	e.POST("/accounts/:acct_id", s.updateAccount, customContext, s.parseJOSERequest, s.addNonce)
-	e.GET("/accounts/:acct_id", s.malformed)
-	e.POST("/accounts/:acct_id/orders", s.notImplemented, customContext, s.parseJOSERequest, s.addNonce)
-	e.GET("/accounts/:acct_id/orders", s.malformed)
-	e.POST("/new-order", s.newOrder, customContext, s.parseJOSERequest, s.addNonce)
-	e.GET("/new-order", s.malformed)
-	e.POST("/authz/:auth_id", s.authorize, customContext, s.parseJOSERequest, s.addNonce)
-	e.GET("/authz/:auth_id", s.malformed)
-	e.POST("/challenges/:challenge_id", s.challenge, customContext, s.parseJOSERequest, s.addNonce)
-	e.GET("/challenges/:challenge_id", s.malformed)
-	e.POST("/orders/:order_id/finalize", s.finalizeOrder, customContext, s.parseJOSERequest, s.addNonce)
-	e.GET("/orders/:order_id/finalize", s.malformed)
-	e.POST("/certs/:cert_id", s.getCert, customContext, s.parseJOSERequest, s.addNonce)
-	e.GET("/certs/:cert_id", s.malformed)
-	e.POST("/revoke-cert", s.revokeCert, customContext, s.parseJOSERequest, s.addNonce)
-	e.GET("/revoke-cert", s.malformed)
-	e.POST("/key-change", s.keyChange, customContext, s.parseJOSERequest, s.addNonce)
-	e.GET("/key-change", s.malformed)
+	e.POST("/new-account", s.newAccount, customContext, s.parseJOSERequest, s.addNonce)
+	e.GET("/new-account", s.methodNotAllowed)
+	e.POST("/accounts/:acct_id", s.updateAccount, customContext, s.parseJOSERequest, s.checkValidAccount, s.addNonce)
+	e.GET("/accounts/:acct_id", s.methodNotAllowed)
+	e.POST("/accounts/:acct_id/orders", s.notImplemented, customContext, s.parseJOSERequest, s.checkValidAccount, s.addNonce)
+	e.GET("/accounts/:acct_id/orders", s.methodNotAllowed)
+	e.POST("/new-order", s.newOrder, customContext, s.parseJOSERequest, s.checkValidAccount, s.addNonce)
+	e.GET("/new-order", s.methodNotAllowed)
+	e.POST("/authz/:auth_id", s.authorize, customContext, s.parseJOSERequest, s.checkValidAccount, s.addNonce)
+	e.GET("/authz/:auth_id", s.methodNotAllowed)
+	e.POST("/challenges/:challenge_id", s.challenge, customContext, s.parseJOSERequest, s.checkValidAccount, s.addNonce)
+	e.GET("/challenges/:challenge_id", s.methodNotAllowed)
+	e.POST("/orders/:order_id/finalize", s.finalizeOrder, customContext, s.parseJOSERequest, s.checkValidAccount, s.addNonce)
+	e.GET("/orders/:order_id/finalize", s.methodNotAllowed)
+	e.POST("/certs/:cert_id", s.getCert, customContext, s.parseJOSERequest, s.checkValidAccount, s.addNonce)
+	e.GET("/certs/:cert_id", s.methodNotAllowed)
+	e.POST("/revoke-cert", s.revokeCert, customContext, s.parseJOSERequest, s.checkValidAccount, s.addNonce)
+	e.GET("/revoke-cert", s.methodNotAllowed)
+	e.POST("/key-change", s.keyChange, customContext, s.parseJOSERequest, s.checkValidAccount, s.addNonce)
+	e.GET("/key-change", s.methodNotAllowed)
 }
 
 func (s *Server) Startup(ctx context.Context) {
@@ -91,8 +92,8 @@ func (s *Server) Startup(ctx context.Context) {
 	go s.manager.StartChallengeLoop(ctx, errCh)
 }
 
-func (s *Server) notImplemented(c echo.Context) error { panic("Not Implemented") }
-func (s *Server) malformed(c echo.Context) error      { return store.ErrMalformed }
+func (s *Server) notImplemented(c echo.Context) error   { panic("Not Implemented") }
+func (s *Server) methodNotAllowed(c echo.Context) error { return store.ErrMethodNotAllowed }
 
 func (s *Server) getDirectory(c echo.Context) error {
 	return c.JSON(http.StatusOK, &acmeclient.Directory{

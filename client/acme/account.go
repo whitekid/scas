@@ -53,6 +53,8 @@ const (
 	AccountStatusRevoked     AccountStatus = "revoked"
 )
 
+func (s AccountStatus) String() string { return string(s) }
+
 type AccountRequest struct {
 	Contact             []string `json:"contact,omitempty" validate:"required"`
 	TermOfServiceAgreed bool     `json:"termOfServiceAgreed,omitempty"`
@@ -140,6 +142,22 @@ func (svc *AccountService) KeyChange(ctx context.Context) error {
 
 	svc.client.key = priv
 	svc.client.pub = pubBytes
+
+	return nil
+}
+
+type DeactiveRequest struct {
+	Status string `json:"status" validate:"required"`
+}
+
+func (svc *AccountService) Deactive(ctx context.Context) error {
+	_, err := svc.client.sendJOSERequest(ctx, http.MethodPost, svc.endpoint, &DeactiveRequest{
+		Status: AccountStatusDeactivated.String(),
+	})
+
+	if err != nil {
+		return errors.Wrapf(err, "fail to request deactive")
+	}
 
 	return nil
 }

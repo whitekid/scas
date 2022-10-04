@@ -185,3 +185,22 @@ func TestAccountKeyChange(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "mailto:updated@example.com", got.Contact[0])
 }
+
+func TestAccountDeactive(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	priv := generateKey(t)
+
+	client := testutils.Must1(acmeclient.New(newTestServer(ctx, t).URL, priv))
+	acct := testutils.Must1(client.NewAccount(ctx, &acmeclient.AccountRequest{Contact: []string{"mailto:hello@example.com"}}))
+
+	err := client.Account(acct.Location).Deactive(ctx)
+	require.NoError(t, err)
+
+	err = client.Account(acct.Location).KeyChange(ctx)
+	require.Contains(t, err.Error(), "Unauthorized")
+
+	_, err = client.Account(acct.Location).Update(ctx, &acmeclient.AccountRequest{Contact: []string{"mailto:updated@example.com"}})
+	require.Contains(t, err.Error(), "Unauthorized")
+}

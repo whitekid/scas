@@ -31,7 +31,8 @@ func (s *Server) parseJOSERequest(next echo.HandlerFunc) echo.HandlerFunc {
 			return store.ErrJOSEHeaderDecodeFail
 		}
 
-		if !s.manager.ValidNonce(c.Request().Context(), cc.header.Nonce) {
+		ctx := c.Request().Context()
+		if !s.manager.ValidNonce(ctx, cc.header.Nonce) {
 			return store.ErrBadNonce
 		}
 
@@ -40,8 +41,30 @@ func (s *Server) parseJOSERequest(next echo.HandlerFunc) echo.HandlerFunc {
 			return errors.Wrapf(store.ErrJOSEHeaderDecodeFail, err.Error())
 		}
 
-		if err := s.manager.VerifySignature(c.Request().Context(), cc.header.JWK, cc.header.KID, req.Signature, req.Protected, req.Payload); err != nil {
+		acct, err := s.manager.VerifySignature(ctx, cc.header.JWK, cc.header.KID, req.Signature, req.Protected, req.Payload)
+		if err != nil {
 			return err
+		}
+
+		cc.account = acct
+		return next(c)
+	}
+}
+
+func (s *Server) checkValidAccount(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) (err error) {
+		cc := c.(*Context)
+
+		if cc.header.JWK != "" {
+			if acct, err := s.manager.GetAccountByKey(c.Request().Context(), cc.header.JWK); err == nil {
+				cc.account = acct
+			}
+		}
+
+		if cc.account != nil {
+			if cc.account.Status != acmeclient.AccountStatusValid {
+				return echo.ErrUnauthorized
+			}
 		}
 
 		return next(c)

@@ -81,7 +81,7 @@ func (s *sqlStoreImpl) CreateAccount(ctx context.Context, acct *Account) (*Accou
 		ID:                  shortuuid.New(),
 		Key:                 acct.Key,
 		TermAgreeAt:         &acct.TermAgreeAt,
-		Status:              string(acct.Status),
+		Status:              acct.Status.String(),
 		Contacts:            strings.Join(acct.Contact, ","),
 		TermOfServiceAgreed: acct.TermOfServiceAgreed,
 	}
@@ -210,6 +210,13 @@ func (s *sqlStoreImpl) UpdateAccountKey(ctx context.Context, acctID string, key 
 	})
 }
 
+func (s *sqlStoreImpl) UpdateAccountStatus(ctx context.Context, acctID string, status acmeclient.AccountStatus) (*Account, error) {
+	return s.updateAccount(ctx, acctID, func(acct *models.Account) error {
+		acct.Status = status.String()
+		return nil
+	})
+}
+
 func (s *sqlStoreImpl) CreateOrder(ctx context.Context, order *Order) (*Order, error) {
 	if err := helper.ValidateStruct(order); err != nil {
 		return nil, err
@@ -218,7 +225,7 @@ func (s *sqlStoreImpl) CreateOrder(ctx context.Context, order *Order) (*Order, e
 	orderRef := &models.Order{
 		ID:        shortuuid.New(),
 		AccountID: order.AccountID,
-		Status:    string(order.Status),
+		Status:    order.Status.String(),
 	}
 
 	goxp.IfThen(order.Expires != nil, func() { orderRef.Expires = &order.Expires.Time })
@@ -238,7 +245,7 @@ func (s *sqlStoreImpl) CreateOrder(ctx context.Context, order *Order) (*Order, e
 	for _, ident := range order.Identifiers {
 		identRef := &models.Identifier{
 			OrderID: &orderRef.ID,
-			Type:    string(ident.Type),
+			Type:    ident.Type.String(),
 			Value:   ident.Value,
 		}
 
@@ -366,7 +373,7 @@ func (s *sqlStoreImpl) updateOrder(ctx context.Context, orderID string, fn func(
 
 func (s *sqlStoreImpl) UpdateOrderStatus(ctx context.Context, orderID string, status acmeclient.OrderStatus) (*Order, error) {
 	return s.updateOrder(ctx, orderID, func(order *models.Order) error {
-		order.Status = string(status)
+		order.Status = status.String()
 		return nil
 	})
 }
@@ -385,7 +392,7 @@ func (s *sqlStoreImpl) CreateAuthz(ctx context.Context, authz *Authz) (*Authz, e
 	identRef := &models.Identifier{
 		ID:      shortuuid.New(),
 		AuthzID: &authzRef.ID,
-		Type:    string(authz.Identifier.Type),
+		Type:    authz.Identifier.Type.String(),
 		Value:   authz.Identifier.Value,
 	}
 
@@ -403,7 +410,7 @@ func authzToModel(authz *Authz) *models.Authz {
 		ID:        authz.ID,
 		AccountID: authz.AccountID,
 		OrderID:   authz.OrderID,
-		Status:    string(authz.Status),
+		Status:    authz.Status.String(),
 		Expires:   timestampToTime(authz.Expires),
 		Wildcard:  authz.Wildcard,
 	}
@@ -444,7 +451,7 @@ func (s *sqlStoreImpl) listAuthz(ctx context.Context, opts ListAuthzOpts) ([]*mo
 	w := &models.Authz{
 		ID:      opts.ID,
 		OrderID: opts.OrderID,
-		Status:  string(opts.Status),
+		Status:  opts.Status.String(),
 	}
 
 	var results []*models.Authz
@@ -539,7 +546,7 @@ func (s *sqlStoreImpl) updateAuthz(ctx context.Context, authzID string, fn func(
 
 func (s *sqlStoreImpl) UpdateAuthzStatus(ctx context.Context, authzID string, status acmeclient.AuthzStatus) (*Authz, error) {
 	return s.updateAuthz(ctx, authzID, func(authz *models.Authz) error {
-		authz.Status = string(status)
+		authz.Status = status.String()
 		return nil
 	})
 }
@@ -563,7 +570,7 @@ func (s *sqlStoreImpl) listChallenges(ctx context.Context, opts ListChallengesOp
 	w := &models.Challenge{
 		ID:      opts.ID,
 		AuthzID: opts.AuthzID,
-		Status:  string(opts.Status),
+		Status:  opts.Status.String(),
 	}
 
 	var results []*models.Challenge
@@ -609,9 +616,9 @@ func (s *sqlStoreImpl) CreateChallenge(ctx context.Context, chal *Challenge) (*C
 	chalRef := &models.Challenge{
 		ID:        shortuuid.New(),
 		AuthzID:   chal.AuthzID,
-		Type:      string(chal.Type),
+		Type:      chal.Type.String(),
 		Token:     chal.Token,
-		Status:    string(chal.Status),
+		Status:    chal.Status.String(),
 		Validated: timestampToTime(chal.Validated),
 		Error:     fx.TernaryCF(chal.Error == nil, func() string { return "" }, func() string { return helper.MarshalJSON(chal.Error) }),
 	}
@@ -639,7 +646,7 @@ func (s *sqlStoreImpl) updateChallenge(ctx context.Context, chalID string, updat
 
 func (s *sqlStoreImpl) UpdateChallengeStatus(ctx context.Context, chalID string, status acmeclient.ChallengeStatus, validated *common.Timestamp) (*Challenge, error) {
 	return s.updateChallenge(ctx, chalID, func(chal *models.Challenge) bool {
-		chal.Status = string(status)
+		chal.Status = status.String()
 		chal.Validated = timestampToTime(validated)
 
 		return true
@@ -648,10 +655,10 @@ func (s *sqlStoreImpl) UpdateChallengeStatus(ctx context.Context, chalID string,
 
 func (s *sqlStoreImpl) UpdateChallengeType(ctx context.Context, chalID string, chalType acmeclient.ChallengeType) (*Challenge, error) {
 	return s.updateChallenge(ctx, chalID, func(chal *models.Challenge) bool {
-		if chal.Type == string(chalType) {
+		if chal.Type == chalType.String() {
 			return false
 		}
-		chal.Type = string(chalType)
+		chal.Type = chalType.String()
 		return true
 	})
 }

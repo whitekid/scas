@@ -21,6 +21,7 @@ type Interface interface {
 	GetAccountByKey(ctx context.Context, key string) (*Account, error)
 	UpdateAccountContact(ctx context.Context, acctID string, contacts []string) (*Account, error)
 	UpdateAccountKey(ctx context.Context, acctID string, key string) (*Account, error)
+	UpdateAccountStatus(ctx context.Context, acctID string, status acmeclient.AccountStatus) (*Account, error)
 
 	CreateOrder(ctx context.Context, order *Order) (*Order, error)
 	GetOrder(ctx context.Context, orderID string) (*Order, error)

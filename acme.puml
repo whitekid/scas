@@ -1,18 +1,69 @@
-@startuml
-Client -> Server: [order] Signature
-Server -> Client: Acquired authorizations
-Client -> Server: [responses] Signature
+@startuml ACME
+skinparam handwritten true
 
-== validation ==
-Client -> Server: [CSR] Signature
-Server -> Client: Acknowledge
+actor User as User
+participant Client
+boundary Server as Server
+queue "Challenge Queue" as ChallengeQueue
+actor "Challenge Server" as ChallengeServer
+boundary CA as CA
 
-== await issurance ==
-Client -> Server: [POST-as-GET request] signature
-Server -> Client: Certificate
+== initialization ==
+Client -> Server: get directory
+Client -> Server: new nonce
+User -> Client: generate or load key-pair
+Client -> Server: new account with public key
 
-== revoke ==
-Client -> Server: [Revocation request] Signature
-Server -> Client: Result
+== JOSE Request ==
+Client -> Client: create payload
+activate Client
+Client -> Client: JOSE signature
+Client -> Client: Sign with private key
+Client -> Server: request as POST-as-GET
+activate Server
+Server -> Server: nonce verification
+Server -> Server: signature verification
+Server -> Server: user state verification
+Server -> Server: do something
+return response with next nonce
+deactivate Client
+
+== Order ==
+Client -> Server: new order
+activate Server
+Server -> Server: create authorizations
+Server -> Server: create challenges
+Server -> ChallengeQueue: enqueue
+return response with status=pending
+loop challenge queue
+    ChallengeQueue -> ChallengeServer: challenge verification(http01, dns01)
+    ChallengeQueue -> Server: update challenge status
+    ChallengeQueue -> Server: update authorization status
+end
+User -> ChallengeServer: set verification information
+loop until status==valid
+    Client -> Server: polling authorization status
+    Server --> Client: status
+end
+
+Client -> Server: finalize order
+activate Server
+Server -> CA: Issue certificate
+return
+
+Client -> Server: download certificate
+activate Server
+return certificate chain as PEM
+
+== User ==
+Client -> Server: update user information
+Client -> Server: key change
+Client -> Server: deactivate
+
+== Cert ==
+Client -> Server: revoke certificate
+activate Server
+Server -> CA: revoke
+return
 
 @enduml

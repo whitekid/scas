@@ -101,44 +101,47 @@ func (m *Manager) UpdateAccount(ctx context.Context, acctID string, contact []st
 	return acct, nil
 }
 
-func (m *Manager) VerifySignature(ctx context.Context, key string, kid string, signature string, header string, payload string) error {
+// VerifySignature verify request signature, if success returns it's account informations with requested KID
+func (m *Manager) VerifySignature(ctx context.Context, key string, kid string, signature string, header string, payload string) (*store.Account, error) {
 	log.Debugf("verifySignature(): key=%s, kid=%s, signature=%s, header=%s, payload=%s", key, kid, signature, header, payload)
 
+	var acct *store.Account
 	if key == "" && kid != "" {
 		account, err := m.store.GetAccount(ctx, idFromURI(kid))
 		if err != nil {
-			return err
+			return nil, err
 		}
 
+		acct = account
 		key = account.Key
 	}
 
 	pubKeyBytes, err := base64.RawURLEncoding.DecodeString(key)
 	if err != nil {
-		return store.ErrBadPublicKey
+		return nil, store.ErrBadPublicKey
 	}
 
 	pub, err := x509.ParsePKIXPublicKey(pubKeyBytes)
 	if err != nil {
-		return store.ErrBadPublicKey
+		return nil, store.ErrBadPublicKey
 	}
 
 	ecdsaPubKey, ok := pub.(*ecdsa.PublicKey)
 	if !ok {
-		return store.ErrBadPublicKey
+		return nil, store.ErrBadPublicKey
 	}
 
 	hash := helper.SHA256Sum([]byte(fmt.Sprintf("%s.%s", header, payload)))
 	sig, err := base64.RawURLEncoding.DecodeString(signature)
 	if err != nil {
-		return errors.Wrap(err, "signature decode failed")
+		return nil, errors.Wrap(err, "signature decode failed")
 	}
 
 	if !x509x.VerifySignature(ecdsaPubKey, hash, sig) {
-		return store.ErrBadSignature
+		return nil, store.ErrBadSignature
 	}
 
-	return nil
+	return acct, nil
 }
 
 func (m *Manager) UpdateAccountKey(ctx context.Context, oldKey, newKey string) (*store.Account, error) {
@@ -156,4 +159,21 @@ func (m *Manager) UpdateAccountKey(ctx context.Context, oldKey, newKey string) (
 	}
 
 	return nil, nil
+}
+
+func (m *Manager) DeactivateAccount(ctx context.Context, acctID string) (*store.Account, error) {
+	acct, err := m.store.GetAccount(ctx, acctID)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := m.checkAgreeTerm(acct); err != nil {
+		return nil, err
+	}
+
+	if acct, err = m.store.UpdateAccountStatus(ctx, acctID, acmeclient.AccountStatusDeactivated); err != nil {
+		return nil, err
+	}
+
+	return acct, nil
 }

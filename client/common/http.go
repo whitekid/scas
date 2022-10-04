@@ -37,3 +37,5 @@ type IdentifierType string
 const (
 	IdentifierDNS IdentifierType = "dns"
 )
+
+func (t IdentifierType) String() string { return string(t) }

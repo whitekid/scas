@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/whitekid/goxp/log"
@@ -74,7 +75,9 @@ func WithClient(endpoint string, key []byte, client *http.Client) (*Client, erro
 		pub:      derBytes,
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
 	if err := c.getDirectory(ctx); err != nil {
 		return nil, errors.Wrapf(err, "fail to create client")
 	}
@@ -198,7 +201,7 @@ func (c *Client) newJOSERequest(url string, payload interface{}, priv x509x.Priv
 }
 
 func (c *Client) sendJOSERequest(ctx context.Context, method string, url string, payload interface{}) (*request.Response, error) {
-	req, err := c.newJOSERequest(url, payload, c.key, c.pub)
+	req, err := c.newJOSERequest(url, payload, c.key, nil)
 	if err != nil {
 		return nil, err
 	}

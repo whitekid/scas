@@ -73,6 +73,8 @@ const (
 	OrderStatusInvalid    OrderStatus = "invalid"
 )
 
+func (s OrderStatus) String() string { return string(s) }
+
 type OrderRequest struct {
 	Identifiers []common.Identifier `json:"identifiers" validator:"required,dive"`
 	NotBefore   *common.Timestamp   `json:"notBefore.omitempty"`
