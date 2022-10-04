@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/base64"
-	"encoding/hex"
 	"time"
 
 	"github.com/pkg/errors"
@@ -16,8 +15,6 @@ import (
 	"scas/acme/store"
 	acmeclient "scas/client/acme"
 	"scas/client/common"
-	"scas/client/common/x509types"
-	"scas/pkg/helper"
 	"scas/pkg/helper/x509x"
 )
 
@@ -66,7 +63,7 @@ func (m *Manager) NewOrder(ctx context.Context, kid string, identifiers []common
 
 		_, err = m.store.CreateChallenge(ctx, &store.Challenge{
 			Challenge: &acmeclient.Challenge{
-				Type:   acmeclient.ChallengeHTTP01,
+				Type:   acmeclient.ChallengeTypeHttp01,
 				Status: acmeclient.ChallengeStatusPending,
 				Token:  base64.RawURLEncoding.EncodeToString(goxp.RandomByte(40)),
 			},
@@ -107,12 +104,14 @@ func (m *Manager) FinalizeOrder(ctx context.Context, orderID string, csr *x509.C
 	if len(fx.Filter(order.Identifiers, func(x common.Identifier) bool {
 		return x.Type == common.IdentifierDNS && (x.Value == csr.Subject.CommonName || fx.Contains(csr.DNSNames, x.Value))
 	})) == 0 {
-		order.Status = acmeclient.OrderStatusReady // TODO 응?... ready 상태로 두라고?? 7.4
-		return nil, store.ErrOrderNotReady
+		order.Status = acmeclient.OrderStatusReady
+		return nil, store.ErrBadCSR
 	}
 
-	// TODO generate key with CA
-	privateKey, err := x509x.GenerateKey(x509.ECDSAWithSHA256)
+	// TODO generate key with CA 현재는 self-signed임...
+	// 조금 복잡하군... CA라면 parent CA등과 연계가 필요하고... local CA도 마찬가지인데..
+	// 이건 project, acme pool 등과 연계가 되어야할 것 같음...
+	privateKey, err := x509x.GenerateKey(csr.SignatureAlgorithm)
 	if err != nil {
 		return nil, errors.Wrapf(err, "key generate failed")
 	}
@@ -160,40 +159,4 @@ func (m *Manager) Authorize(ctx context.Context, authzID string) (*store.Authz, 
 	}
 
 	return authz, nil
-}
-
-func (m *Manager) GetCertificate(ctx context.Context, certID string) (*store.Certificate, error) {
-	cert, err := m.store.GetCertificate(ctx, certID)
-	if err != nil {
-		return nil, err
-	}
-
-	if cert.RevokedAt != nil {
-		return nil, store.ErrAlreadyRevoked
-	}
-
-	return cert, nil
-}
-
-// RevokeCertificate revoke certificate
-// cert der format certificate
-func (m *Manager) RevokeCertificate(ctx context.Context, certDer []byte, reason x509types.RevokeReason) error {
-	if reason.String() == "" {
-		return store.ErrBadRevocationReason
-	}
-
-	cert, err := m.store.GetCertificateBySum(ctx, hex.EncodeToString(helper.SHA256Sum(certDer)))
-	if err != nil {
-		return err
-	}
-
-	if cert.RevokedAt != nil {
-		return store.ErrAlreadyRevoked
-	}
-
-	if _, err := m.store.RevokeCertificate(ctx, cert.ID, reason); err != nil {
-		return err
-	}
-
-	return nil
 }

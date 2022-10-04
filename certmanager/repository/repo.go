@@ -109,38 +109,12 @@ func (repo *repoImpl) ListCAPool(ctx context.Context, projectID string, opts sto
 }
 
 func (repo *repoImpl) CreateCertificateAuthority(ctx context.Context, projectID string, caPoolID string, req *provider.CreateRequest, parentCAID string) (*types.CertificateAuthority, error) {
-	if err := helper.ValidateStruct(req); err != nil {
-		return nil, errors.Wrap(err, "fail to create certificate authority")
-	}
-
-	// get signer for parent ca
-	var signer *x509.Certificate
-	var signerPrivateKey x509x.PrivateKey
-	var CAID *string
-	if parentCAID != "" {
-		ca, err := repo.store.GetCA(ctx, projectID, caPoolID, parentCAID)
-		if err != nil {
-			return nil, errors.Wrap(err, "fail to create certificate authority")
-		}
-
-		signer, err = x509x.ParseCertificate(ca.Cert)
-		if err != nil {
-			return nil, errors.Wrap(err, "fail to create certificate authority")
-		}
-
-		signerPrivateKey, err = x509x.ParsePrivateKey(ca.Key)
-		if err != nil {
-			return nil, errors.Wrap(err, "fail to create certificate authority")
-		}
-		CAID = &parentCAID
-	}
-
-	certPEM, certPrivateKeyPEM, err := repo.provider.CreateCertificate(ctx, req, signer, signerPrivateKey)
+	certPEM, certPrivateKeyPEM, err := repo.createCertificate(ctx, projectID, caPoolID, req, parentCAID)
 	if err != nil {
-		return nil, errors.Wrap(err, "fail to create certificate authority")
+		return nil, err
 	}
 
-	ca, err := repo.store.CreateCA(ctx, projectID, caPoolID, req, certPEM, certPrivateKeyPEM, CAID)
+	ca, err := repo.store.CreateCA(ctx, projectID, caPoolID, req, certPEM, certPrivateKeyPEM, fx.Ternary(parentCAID == "", nil, &parentCAID))
 	if err != nil {
 		return nil, errors.Wrap(err, "fail to create certificate authority")
 	}
@@ -148,49 +122,53 @@ func (repo *repoImpl) CreateCertificateAuthority(ctx context.Context, projectID 
 	return ca, nil
 }
 
+// createCertificate create certificate with provider and returns cert, privateKey, error
+func (repo *repoImpl) createCertificate(ctx context.Context, projectID string, caPoolID string, req *provider.CreateRequest, parentCAID string) ([]byte, []byte, error) {
+	if err := helper.ValidateStruct(req); err != nil {
+		return nil, nil, errors.Wrap(err, "fail to create certificate")
+	}
+
+	// get parent for signer
+	var parent *x509.Certificate
+	var parentPrivateKey x509x.PrivateKey
+	if parentCAID != "" {
+		ca, err := repo.store.GetCA(ctx, projectID, caPoolID, parentCAID)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "fail to create certificate")
+		}
+
+		parent, err = x509x.ParseCertificate(ca.Cert)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "fail to create certificate")
+		}
+
+		parentPrivateKey, err = x509x.ParsePrivateKey(ca.Key)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "fail to create certificate")
+		}
+	}
+
+	return repo.provider.CreateCertificate(ctx, req, parent, parentPrivateKey)
+}
+
 func (repo *repoImpl) GetCertificateAuthority(ctx context.Context, projectID string, poolID string, ID string) (*types.CertificateAuthority, error) {
 	return repo.store.GetCA(ctx, projectID, poolID, ID)
 }
 
-// TODO CreateCertificateAuthority와 거의 같은 것 같은데... chain만 빼고...
 func (repo *repoImpl) CreateCertificate(ctx context.Context, projectID string, caPoolID string, req *provider.CreateRequest, CAID string) (*types.Certificate, error) {
-	if err := helper.ValidateStruct(req); err != nil {
-		return nil, errors.Wrap(err, "fail to create certficiate")
-	}
-
-	// get signer for parent ca
-	var signer *x509.Certificate
-	var signerPrivateKey x509x.PrivateKey
-	if CAID != "" {
-		ca, err := repo.store.GetCA(ctx, projectID, caPoolID, CAID)
-		if err != nil {
-			return nil, errors.Wrap(err, "fail to create certificate")
-		}
-
-		signer, err = x509x.ParseCertificate(ca.Cert)
-		if err != nil {
-			return nil, errors.Wrap(err, "fail to create certificate")
-		}
-
-		signerPrivateKey, err = x509x.ParsePrivateKey(ca.Key)
-		if err != nil {
-			return nil, errors.Wrap(err, "fail to create certificate authority")
-		}
-	}
-
-	certPEM, certPrivateKeyPEM, err := repo.provider.CreateCertificate(ctx, req, signer, signerPrivateKey)
+	certPEM, certPrivateKeyPEM, err := repo.createCertificate(ctx, projectID, caPoolID, req, CAID)
 	if err != nil {
-		return nil, errors.Wrap(err, "fail to create certificate authority")
+		return nil, err
 	}
 
 	chainPEM, err := repo.getCertChain(ctx, projectID, caPoolID)
 	if err != nil {
-		return nil, errors.Wrap(err, "fail to create certificate authority")
+		return nil, errors.Wrap(err, "fail to create certificate")
 	}
 
 	cert, err := repo.store.CreateCertificate(ctx, projectID, caPoolID, req, certPEM, certPrivateKeyPEM, chainPEM, CAID)
 	if err != nil {
-		return nil, errors.Wrap(err, "fail to create certificate authority")
+		return nil, errors.Wrap(err, "fail to create certificate")
 	}
 
 	return &types.Certificate{

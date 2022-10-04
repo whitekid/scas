@@ -19,31 +19,31 @@ import (
 )
 
 const (
-	certificatePEMBlockType              = "CERTIFICATE"
-	crlPEMBlockType                      = "X509 CRL"
-	csrPEMBlockType                      = "CERTIFICATE REQUEST"
-	oldCsrPEMBlockType                   = "NEW CERTIFICATE REQUEST"
-	rsaPrivateKeyPEMBlockType            = "RSA PRIVATE KEY"
-	ecdsaPrivateKeyPEMBlockType          = "EC PRIVATE KEY"
-	pkcs8PrivateKeyPEMBlockType          = "PRIVATE KEY"
-	encryptedPKCS8PrivateKeyPEMBLockType = "ENCRYPTED PRIVATE KEY"
+	CertificatePEMBlockType              = "CERTIFICATE"
+	CrlPEMBlockType                      = "X509 CRL"
+	CsrPEMBlockType                      = "CERTIFICATE REQUEST"
+	OldCsrPEMBlockType                   = "NEW CERTIFICATE REQUEST"
+	RsaPrivateKeyPEMBlockType            = "RSA PRIVATE KEY"
+	EcdsaPrivateKeyPEMBlockType          = "EC PRIVATE KEY"
+	Pkcs8PrivateKeyPEMBlockType          = "PRIVATE KEY"
+	EncryptedPKCS8PrivateKeyPEMBLockType = "ENCRYPTED PRIVATE KEY"
 
 	pemPrefix = "-----BEGIN "
 )
 
 var (
-	pemCcertificatePrefix          = []byte(pemPrefix + certificatePEMBlockType)
-	pemCSRPrefix                   = []byte(pemPrefix + csrPEMBlockType)
-	pemRsaPrivateKeyPEMBlockType   = []byte(pemPrefix + rsaPrivateKeyPEMBlockType)
-	epmEcdsaPrivateKeyPEMBlockType = []byte(pemPrefix + ecdsaPrivateKeyPEMBlockType)
-	pemPkcs8PrivateKeyPEMBlockType = []byte(pemPrefix + pkcs8PrivateKeyPEMBlockType)
+	pemPrefixCertificate     = []byte(pemPrefix + CertificatePEMBlockType)
+	pemPrefixCSR             = []byte(pemPrefix + CsrPEMBlockType)
+	pemPrefixRsaPrivateKey   = []byte(pemPrefix + RsaPrivateKeyPEMBlockType)
+	pemPrefixEcdsaPrivateKey = []byte(pemPrefix + EcdsaPrivateKeyPEMBlockType)
+	pemPrefixPkcs8PrivateKey = []byte(pemPrefix + Pkcs8PrivateKeyPEMBlockType)
 )
 
 var randReader = rand.Reader
 
 // ParseCertificate parse x509 certificate PEM block or DER bytes
 func ParseCertificate(certBytes []byte) (*x509.Certificate, error) {
-	if bytes.HasPrefix(certBytes, pemCcertificatePrefix) {
+	if bytes.HasPrefix(certBytes, pemPrefixCertificate) {
 		p, _ := pem.Decode(certBytes)
 		if p == nil {
 			return nil, errors.New("invalid PEM")
@@ -74,7 +74,7 @@ func ParseCertificateChain(derBytes []byte) ([]*x509.Certificate, error) {
 
 // ParseCSR parse x509 CSR PEM block
 func ParseCSR(csrBytes []byte) (*x509.CertificateRequest, error) {
-	if bytes.HasPrefix(csrBytes, pemCSRPrefix) {
+	if bytes.HasPrefix(csrBytes, pemPrefixCSR) {
 		p, _ := pem.Decode(csrBytes)
 		if p == nil {
 			return nil, errors.New("invalid PEM")
@@ -140,10 +140,10 @@ func ParsePrivateKey(keyPemBytes []byte) (PrivateKey, error) {
 	var key PrivateKey
 	var err error
 	switch {
-	case bytes.HasPrefix(keyPemBytes, pemRsaPrivateKeyPEMBlockType):
+	case bytes.HasPrefix(keyPemBytes, pemPrefixRsaPrivateKey):
 		key, err = x509.ParsePKCS1PrivateKey(p.Bytes)
 
-	case bytes.HasPrefix(keyPemBytes, epmEcdsaPrivateKeyPEMBlockType):
+	case bytes.HasPrefix(keyPemBytes, pemPrefixEcdsaPrivateKey):
 		key, err = x509.ParseECPrivateKey(p.Bytes)
 
 	default:
@@ -170,7 +170,7 @@ func CreateCertificateRequest(template *x509.CertificateRequest) (csr []byte, pe
 	}
 
 	block := &pem.Block{
-		Type:    csrPEMBlockType,
+		Type:    CsrPEMBlockType,
 		Headers: nil,
 		Bytes:   derBytes,
 	}
@@ -179,7 +179,7 @@ func CreateCertificateRequest(template *x509.CertificateRequest) (csr []byte, pe
 
 func EncodeCertificateToPEM(derBytes []byte) []byte {
 	return pem.EncodeToMemory(&pem.Block{
-		Type:    certificatePEMBlockType,
+		Type:    CertificatePEMBlockType,
 		Headers: nil,
 		Bytes:   derBytes,
 	})
@@ -191,17 +191,17 @@ func EncodePrivateKeyToPEM(privateKey PrivateKey) ([]byte, error) {
 
 	switch key := privateKey.(type) {
 	case *rsa.PrivateKey:
-		pemType = rsaPrivateKeyPEMBlockType
+		pemType = RsaPrivateKeyPEMBlockType
 		keyBytes = x509.MarshalPKCS1PrivateKey(key)
 	case *ecdsa.PrivateKey:
-		pemType = ecdsaPrivateKeyPEMBlockType
+		pemType = EcdsaPrivateKeyPEMBlockType
 		derBytes, err := x509.MarshalECPrivateKey(key)
 		if err != nil {
 			return nil, errors.Wrap(err, "fail to encode private key")
 		}
 		keyBytes = derBytes
 	case ed25519.PrivateKey:
-		pemType = ecdsaPrivateKeyPEMBlockType
+		pemType = EcdsaPrivateKeyPEMBlockType
 		derBytes, err := x509.MarshalPKCS8PrivateKey(key)
 		if err != nil {
 			return nil, errors.Wrap(err, "fail to encode private key")

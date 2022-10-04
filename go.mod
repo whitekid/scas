@@ -17,7 +17,7 @@ require (
 	github.com/stretchr/testify v1.8.0
 	github.com/swaggo/echo-swagger v1.3.5
 	github.com/swaggo/swag v1.8.6
-	github.com/whitekid/goxp v0.0.0-20220928064207-52b563c29fd3
+	github.com/whitekid/goxp v0.0.0-20221007001030-9e7a63291f01
 	gopkg.in/yaml.v3 v3.0.1
 	gorm.io/driver/mysql v1.3.6
 	gorm.io/driver/postgres v1.3.10
@@ -75,7 +75,7 @@ require (
 	go.uber.org/zap v1.23.0 // indirect
 	golang.org/x/crypto v0.0.0-20220722155217-630584e8d5aa // indirect
 	golang.org/x/mod v0.6.0-dev.0.20220106191415-9b9b3d81d5e3 // indirect
-	golang.org/x/net v0.0.0-20220927171203-f486391704dc // indirect
+	golang.org/x/net v0.0.0-20221004154528-8021a29435af // indirect
 	golang.org/x/sys v0.0.0-20220728004956-3c1f35247d10 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/time v0.0.0-20201208040808-7e3f01d25324 // indirect

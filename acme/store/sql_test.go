@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lithammer/shortuuid/v4"
 	"github.com/stretchr/testify/require"
 	"github.com/whitekid/goxp"
 
@@ -20,9 +19,12 @@ import (
 
 type testSQL struct {
 	*sqlStoreImpl
+	acct  *Account
+	order *Order
+	authz *Authz
 }
 
-func newSQL(t *testing.T, scheme string) *testSQL {
+func newFixture(ctx context.Context, t *testing.T, scheme string) *testSQL {
 	dbname := testutils.DBName(t)
 	var dburl string
 	switch scheme {
@@ -33,15 +35,61 @@ func newSQL(t *testing.T, scheme string) *testSQL {
 		require.Failf(t, "not supported scheme", scheme)
 	}
 
-	s := &testSQL{sqlStoreImpl: NewSQLStore(dburl).(*sqlStoreImpl)}
-	return s
+	s := NewSQLStore(dburl).(*sqlStoreImpl)
+
+	acct := testutils.Must1(s.CreateAccount(ctx, &Account{
+		AccountResource: acmeclient.AccountResource{
+			Status:  acmeclient.AccountStatusValid,
+			Contact: []string{"mailto:hello@example.com"},
+		},
+		Key: goxp.RandomString(10),
+	}))
+
+	order := testutils.Must1(s.CreateOrder(ctx, &Order{
+		Order: &acmeclient.Order{
+			OrderResource: acmeclient.OrderResource{
+				Status:      acmeclient.OrderStatusPending,
+				Identifiers: []common.Identifier{{Type: common.IdentifierDNS, Value: "server1.acme.127.0.0.1.sslip.io"}},
+				NotAfter:    common.TimestampNow().AddDate(1, 0, 0),
+				NotBefore:   common.TimestampNow().AddDate(0, 1, 0),
+			},
+		},
+		AccountID: acct.ID,
+	}))
+
+	authz, err := s.CreateAuthz(ctx, &Authz{
+		AccountID:  acct.ID,
+		OrderID:    order.ID,
+		Status:     acmeclient.AuthzStatusPending,
+		Identifier: common.Identifier{Type: common.IdentifierDNS, Value: "server1.acme.127.0.0.1.sslip.io"},
+		Expires:    common.TimestampNow().Add(30 * time.Minute),
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, authz.ID)
+
+	chal, err := s.CreateChallenge(ctx, &Challenge{
+		Challenge: &acmeclient.Challenge{
+			Type:   acmeclient.ChallengeTypeHttp01,
+			Status: acmeclient.ChallengeStatusPending,
+		},
+		AuthzID: authz.ID,
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, chal.ID)
+
+	return &testSQL{
+		sqlStoreImpl: s,
+		acct:         acct,
+		order:        order,
+		authz:        authz,
+	}
 }
 
 func TestNonce(t *testing.T) {
-	s := newSQL(t, "sqlite")
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	s := newFixture(ctx, t, "sqlite")
 
 	nonce, err := s.CreateNonce(ctx)
 	require.NoError(t, err)
@@ -71,29 +119,18 @@ func TestAccount(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	s := newSQL(t, "sqlite")
-
-	acct, err := s.CreateAccount(ctx, &Account{
-		AccountResource: acmeclient.AccountResource{
-			Status:  acmeclient.AccountStatusValid,
-			Contact: []string{"contact@example.com"},
-		},
-		Key: goxp.RandomString(10),
-	})
-	require.NoError(t, err)
-	require.NotNil(t, acct)
-	require.NotEmpty(t, acct.ID)
+	s := newFixture(ctx, t, "sqlite")
 
 	{
-		got, err := s.GetAccount(ctx, acct.ID)
+		got, err := s.GetAccount(ctx, s.acct.ID)
 		require.NoError(t, err)
-		require.Equal(t, acct, got)
+		require.Equal(t, s.acct, got)
 	}
 
 	{
-		got, err := s.GetAccountByKey(ctx, acct.Key)
+		got, err := s.GetAccountByKey(ctx, s.acct.Key)
 		require.NoError(t, err)
-		require.Equal(t, acct, got)
+		require.Equal(t, s.acct, got)
 	}
 }
 
@@ -101,16 +138,7 @@ func TestOrder(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	s := newSQL(t, "sqlite")
-
-	acct, err := s.CreateAccount(ctx, &Account{
-		AccountResource: acmeclient.AccountResource{
-			Status:  acmeclient.AccountStatusValid,
-			Contact: []string{"hello@example.com"},
-		},
-		Key: goxp.RandomString(20),
-	})
-	require.NoError(t, err)
+	s := newFixture(ctx, t, "sqlite")
 
 	// create order, authz and challenge
 	order, err := s.CreateOrder(ctx, &Order{
@@ -123,18 +151,16 @@ func TestOrder(t *testing.T) {
 				NotBefore:   common.TimestampNow().AddDate(0, 1, 0),
 			},
 		},
-		AccountID: acct.ID,
+		AccountID: s.acct.ID,
 	})
 	require.NoError(t, err)
 	require.NotNil(t, order)
 	require.NotEmpty(t, order.ID)
 	require.Equal(t, 1, len(order.Identifiers))
 
-	// TODO sequence diagram을 한 번 그려봐야겠음.
-	// TODO create authz
 	for _, ident := range order.Identifiers {
 		authz, err := s.CreateAuthz(ctx, &Authz{
-			AccountID: acct.ID,
+			AccountID: s.acct.ID,
 			OrderID:   order.ID,
 			Status:    acmeclient.AuthzStatusPending,
 			Expires:   common.TimestampNow().Add(time.Minute * 30),
@@ -150,8 +176,7 @@ func TestOrder(t *testing.T) {
 		chal, err := s.CreateChallenge(ctx, &Challenge{
 			AuthzID: authz.ID,
 			Challenge: &acmeclient.Challenge{
-				Type:   acmeclient.ChallengeHTTP01,
-				Token:  shortuuid.New(),
+				Type:   acmeclient.ChallengeTypeHttp01,
 				Status: acmeclient.ChallengeStatusPending,
 			},
 		})
@@ -178,6 +203,27 @@ func TestOrder(t *testing.T) {
 	}
 }
 
+func TestAuthz(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	s := newFixture(ctx, t, "sqlite")
+
+	got, err := s.GetAuthz(ctx, s.authz.ID)
+	require.NoError(t, err)
+	require.NotEmpty(t, got.Challenges)
+
+	cert, err := s.CreateCertificate(ctx, &Certificate{
+		OrderID: s.order.ID,
+		Chain:   goxp.RandomByte(100),
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, cert.ID)
+
+	_, err = s.UpdateAuthzStatus(ctx, s.authz.ID, acmeclient.AuthzStatusValid)
+	require.NoError(t, err)
+}
+
 func TestChallengeValidate(t *testing.T) {
 	type args struct {
 		challenge *Challenge
@@ -188,21 +234,11 @@ func TestChallengeValidate(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			`invalid token`, args{&Challenge{
-				Challenge: &acmeclient.Challenge{
-					Type:   acmeclient.ChallengeHTTP01,
-					Status: acmeclient.ChallengeStatusPending,
-				},
-				AuthzID: shortuuid.New(),
-			}}, true},
-		{
 			`valid`, args{&Challenge{
 				Challenge: &acmeclient.Challenge{
-					Type:   acmeclient.ChallengeHTTP01,
-					Token:  shortuuid.New(),
+					Type:   acmeclient.ChallengeTypeHttp01,
 					Status: acmeclient.ChallengeStatusPending,
 				},
-				AuthzID: shortuuid.New(),
 			}}, false},
 	}
 	for _, tt := range tests {
@@ -210,10 +246,10 @@ func TestChallengeValidate(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			s := newSQL(t, "sqlite")
+			s := newFixture(ctx, t, "sqlite")
 
+			tt.args.challenge.AuthzID = s.authz.ID
 			got, err := s.CreateChallenge(ctx, tt.args.challenge)
-
 			if gormx.IsSQLError(err) {
 				return
 			}

@@ -34,7 +34,7 @@ func (s *Server) errorHandler(next echo.HandlerFunc) echo.HandlerFunc {
 				Type:     store.ErrUserActionRequired.Type,
 				Title:    store.ErrUserActionRequired.Title,
 				Status:   store.ErrUserActionRequired.Status,
-				Instance: s.termsURL(),
+				Instance: s.acme.termsURL(c),
 			}
 		}
 

@@ -14,7 +14,7 @@ const (
 	nonceTimeout      = time.Minute * 30
 )
 
-func (s *Server) addNonce(next echo.HandlerFunc) echo.HandlerFunc {
+func (s *ACMEServer) addNonce(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		if 200 <= c.Response().Status && c.Response().Status < 300 {
 			nonce, err := s.manager.NewNonce(c.Request().Context())
@@ -30,9 +30,9 @@ func (s *Server) addNonce(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
-func (s *Server) newNonce(c echo.Context) error {
+func (s *ACMEServer) newNonce(c echo.Context) error {
 	header := c.Response().Header()
 	header.Set("Cache-Control", "no-store")
-	header.Set("Link", s.directoryURL())
+	header.Set("Link", s.directoryURL(c))
 	return c.NoContent(http.StatusOK)
 }

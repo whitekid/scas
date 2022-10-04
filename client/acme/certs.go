@@ -3,6 +3,7 @@ package acme
 import (
 	"context"
 	"encoding/base64"
+	"encoding/pem"
 	"io"
 	"net/http"
 
@@ -12,7 +13,7 @@ import (
 )
 
 // Certificate represents certificate services
-func (client *Client) Certificate(endpoint string) *CertService {
+func (client *ACMEClient) Certificate(endpoint string) *CertService {
 	return &CertService{
 		client:   client,
 		endpoint: endpoint,
@@ -20,7 +21,7 @@ func (client *Client) Certificate(endpoint string) *CertService {
 }
 
 type CertService struct {
-	client   *Client
+	client   *ACMEClient
 	endpoint string
 }
 
@@ -46,9 +47,14 @@ type CertificateRevoke struct {
 }
 
 func (svc *CertService) Revoke(ctx context.Context, certPEM []byte, reason x509types.RevokeReason) error {
+	p, _ := pem.Decode(certPEM)
+	if p == nil {
+		return errors.New("invalid PEM format")
+	}
+
 	_, err := svc.client.sendJOSERequest(ctx, http.MethodPost, svc.client.directory.RevokeCert,
 		&CertificateRevoke{
-			Certificate: base64.RawURLEncoding.EncodeToString(certPEM),
+			Certificate: base64.RawURLEncoding.EncodeToString(p.Bytes),
 			Reason:      int(reason),
 		})
 	if err != nil {

@@ -10,6 +10,9 @@ import (
 )
 
 type Interface interface {
+	CreateProject(ctx context.Context, proj *Project) (*Project, error)
+	GetProject(ctx context.Context, projID string) (*Project, error)
+
 	CreateNonce(ctx context.Context) (string, error) // create new nonce
 	ValidNonce(ctx context.Context, nonce string) bool
 	// CleanupExpiredNonce cleanup expired nonce
@@ -42,7 +45,7 @@ type Interface interface {
 	CreateCertificate(ctx context.Context, cert *Certificate) (*Certificate, error)
 	ListCertificate(ctx context.Context, opts ListCertificateOpts) ([]*Certificate, error)
 	GetCertificate(ctx context.Context, certID string) (*Certificate, error)
-	// Get certificate by certificate sha256 digest of der format
+	// Get certificate by certificate sha256 digest of pem format
 	GetCertificateBySum(ctx context.Context, sum string) (*Certificate, error)
 	RevokeCertificate(ctx context.Context, certID string, reason x509types.RevokeReason) (*Certificate, error)
 }

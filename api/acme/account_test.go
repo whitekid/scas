@@ -14,6 +14,28 @@ import (
 	"scas/pkg/testutils"
 )
 
+func newFixture(t *testing.T, ctx context.Context) *Fixture {
+	server := newTestServer(ctx, t)
+	client := acmeclient.NewClient(server.URL, nil)
+	proj := testutils.Must1(client.Projects().Create(ctx, &acmeclient.Project{Name: "test"}))
+
+	priv := generateKey(t)
+	acme := testutils.Must1(client.ACME(proj.ACMEEndpoint, priv))
+	acct := testutils.Must1(acme.NewAccount(ctx, &acmeclient.AccountRequest{Contact: []string{"mailto:hello@example.com"}}))
+
+	return &Fixture{
+		ACMEClient: acme,
+		server:     server,
+		acct:       acct,
+	}
+}
+
+type Fixture struct {
+	*acmeclient.ACMEClient
+	server *TestServer
+	acct   *acmeclient.Account
+}
+
 func generateKey(t *testing.T) []byte {
 	privateKey, err := x509x.GenerateKey(x509.ECDSAWithSHA256)
 	require.NoError(t, err)
@@ -25,8 +47,6 @@ func generateKey(t *testing.T) []byte {
 }
 
 func TestNewAccount(t *testing.T) {
-	priv := generateKey(t)
-
 	type args struct {
 		contact string
 	}
@@ -43,7 +63,7 @@ func TestNewAccount(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			client := testutils.Must1(acmeclient.New(newTestServer(ctx, t).URL, priv))
+			client := newFixture(t, ctx)
 
 			got, err := client.NewAccount(ctx, &acmeclient.AccountRequest{Contact: []string{tt.args.contact}})
 			require.Truef(t, (err != nil) == tt.wantErr, `NewAccount() failed: error = %+v, wantErr = %v`, err, tt.wantErr)
@@ -59,8 +79,6 @@ func TestNewAccount(t *testing.T) {
 }
 
 func TestFindAccountByKey(t *testing.T) {
-	priv := generateKey(t)
-
 	type args struct {
 		contact string
 	}
@@ -75,7 +93,7 @@ func TestFindAccountByKey(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			client := testutils.Must1(acmeclient.New(newTestServer(ctx, t).URL, priv))
+			client := newFixture(t, ctx)
 
 			created, err := client.NewAccount(ctx, &acmeclient.AccountRequest{Contact: []string{tt.args.contact}})
 			require.NoError(t, err)
@@ -108,8 +126,7 @@ func TestUpdateAccount(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			priv := generateKey(t)
-			client := testutils.Must1(acmeclient.New(newTestServer(ctx, t).URL, priv))
+			client := newFixture(t, ctx)
 
 			acct, err := client.NewAccount(ctx, &acmeclient.AccountRequest{Contact: []string{"mailto:hello@example.com"}})
 			require.NoError(t, err)
@@ -130,8 +147,6 @@ func TestUpdateAccount(t *testing.T) {
 }
 
 func TestTermChanged(t *testing.T) {
-	priv := generateKey(t)
-
 	type args struct {
 		termUpdateAt time.Time
 	}
@@ -148,13 +163,12 @@ func TestTermChanged(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			ts := newTestServer(ctx, t)
-			client := testutils.Must1(acmeclient.New(ts.URL, priv))
+			client := newFixture(t, ctx)
 
 			acct, err := client.NewAccount(ctx, &acmeclient.AccountRequest{Contact: []string{"mailto:hello@example.com"}})
 			require.NoError(t, err)
 
-			ts.server.manager.SetTermUpdated(tt.args.termUpdateAt)
+			client.server.server.manager.SetTermUpdated(tt.args.termUpdateAt)
 			_, err = client.Account(acct.Location).Update(ctx, &acmeclient.AccountRequest{Contact: []string{"mailto:updated@example.com"}})
 			require.Truef(t, (err != nil) == tt.wantErr, `NewAccount() failed: error = %+v, wantErr = %v`, err, tt.wantErr)
 			if tt.wantErr {
@@ -162,7 +176,7 @@ func TestTermChanged(t *testing.T) {
 				require.ErrorAs(t, err, &p)
 
 				// require.Equal(t, store.ErrUserActionRequired.Status, p.Status)
-				require.Regexpf(t, "^http", p.Instance, "problem: %+v", p)
+				require.Regexpf(t, "^http", p.Instance, "instance: %s", p.Instance)
 				return
 			}
 		})
@@ -173,15 +187,12 @@ func TestAccountKeyChange(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	priv := generateKey(t)
+	client := newFixture(t, ctx)
 
-	client := testutils.Must1(acmeclient.New(newTestServer(ctx, t).URL, priv))
-	acct := testutils.Must1(client.NewAccount(ctx, &acmeclient.AccountRequest{Contact: []string{"mailto:hello@example.com"}}))
-
-	err := client.Account(acct.Location).KeyChange(ctx)
+	err := client.Account(client.acct.Location).KeyChange(ctx)
 	require.NoError(t, err)
 
-	got, err := client.Account(acct.Location).Update(ctx, &acmeclient.AccountRequest{Contact: []string{"mailto:updated@example.com"}})
+	got, err := client.Account(client.acct.Location).Update(ctx, &acmeclient.AccountRequest{Contact: []string{"mailto:updated@example.com"}})
 	require.NoError(t, err)
 	require.Equal(t, "mailto:updated@example.com", got.Contact[0])
 }
@@ -190,17 +201,14 @@ func TestAccountDeactive(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	priv := generateKey(t)
+	client := newFixture(t, ctx)
 
-	client := testutils.Must1(acmeclient.New(newTestServer(ctx, t).URL, priv))
-	acct := testutils.Must1(client.NewAccount(ctx, &acmeclient.AccountRequest{Contact: []string{"mailto:hello@example.com"}}))
-
-	err := client.Account(acct.Location).Deactive(ctx)
+	err := client.Account(client.acct.Location).Deactive(ctx)
 	require.NoError(t, err)
 
-	err = client.Account(acct.Location).KeyChange(ctx)
+	err = client.Account(client.acct.Location).KeyChange(ctx)
 	require.Contains(t, err.Error(), "Unauthorized")
 
-	_, err = client.Account(acct.Location).Update(ctx, &acmeclient.AccountRequest{Contact: []string{"mailto:updated@example.com"}})
+	_, err = client.Account(client.acct.Location).Update(ctx, &acmeclient.AccountRequest{Contact: []string{"mailto:updated@example.com"}})
 	require.Contains(t, err.Error(), "Unauthorized")
 }

@@ -11,7 +11,7 @@ import (
 )
 
 // Challenge represents authorize service
-func (client *Client) Challenge(endpoint string) *ChallengeService {
+func (client *ACMEClient) Challenge(endpoint string) *ChallengeService {
 	return &ChallengeService{
 		client:   client,
 		endpoint: endpoint,
@@ -19,7 +19,7 @@ func (client *Client) Challenge(endpoint string) *ChallengeService {
 }
 
 type ChallengeService struct {
-	client   *Client
+	client   *ACMEClient
 	endpoint string
 }
 

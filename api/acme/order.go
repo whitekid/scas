@@ -14,7 +14,7 @@ import (
 	acmeclient "scas/client/acme"
 )
 
-func (s *Server) newOrder(c echo.Context) error {
+func (s *ACMEServer) newOrder(c echo.Context) error {
 	cc := c.(*Context)
 
 	req := &acmeclient.OrderRequest{}
@@ -27,15 +27,15 @@ func (s *Server) newOrder(c echo.Context) error {
 		return errors.Wrapf(err, "fail to create order")
 	}
 
-	order.Finalize = s.finalizeURL(order.ID)
-	order.Authz = fx.Map(order.Authz, func(id string) string { return s.authzURL(id) })
-	order.Certificate = s.certificateURL(order.Certificate)
+	order.Finalize = s.finalizeURL(c, order.ID)
+	order.Authz = fx.Map(order.Authz, func(id string) string { return s.authzURL(c, id) })
+	order.Certificate = s.certificateURL(c, order.Certificate)
 
-	c.Response().Header().Set(echo.HeaderLocation, s.orderURL(order.ID))
+	c.Response().Header().Set(echo.HeaderLocation, s.orderURL(c, order.ID))
 	return c.JSON(http.StatusCreated, &order.OrderResource)
 }
 
-func (s *Server) finalizeOrder(c echo.Context) error {
+func (s *ACMEServer) finalizeOrder(c echo.Context) error {
 	log.Debugf("finalizeOrder()")
 
 	req := &acmeclient.FinalizeRequest{}
@@ -58,31 +58,32 @@ func (s *Server) finalizeOrder(c echo.Context) error {
 		return errors.Wrapf(err, "fail to finalize order")
 	}
 
-	order.Certificate = s.certificateURL(order.Certificate)
+	order.Certificate = s.certificateURL(c, order.Certificate)
 
 	c.Response().Header().Set(echo.HeaderLocation, order.Location)
 	return c.JSON(http.StatusOK, order)
 }
 
-func (s *Server) authorize(c echo.Context) error {
+func (s *ACMEServer) authorize(c echo.Context) error {
 	authz, err := s.manager.Authorize(c.Request().Context(), c.Param("auth_id"))
 	if err != nil {
 		return errors.Wrapf(err, "fail to get authorization")
 	}
 
 	for _, chal := range authz.Challenges {
-		chal.URL = s.challengeURL(chal.ID)
+		chal.URL = s.challengeURL(c, chal.ID)
 	}
 
-	c.Response().Header().Set(echo.HeaderLocation, s.authzURL(authz.ID))
-	return c.JSON(http.StatusOK, &acmeclient.Authz{
+	// Spec 상에는 Location이 없다. 편의를 위해서 ID를 넣어준다.
+	c.Response().Header().Set(echo.HeaderLocation, s.authzURL(c, authz.ID))
+	return c.JSON(http.StatusOK, &acmeclient.AuthzResource{
 		Status:     authz.Status,
 		Expires:    authz.Expires,
 		Identifier: authz.Identifier,
 		Challenges: fx.Map(authz.Challenges, func(ch *store.Challenge) *acmeclient.Challenge {
 			return &acmeclient.Challenge{
 				Type:      ch.Type,
-				URL:       s.challengeURL(ch.ID),
+				URL:       s.challengeURL(c, ch.ID),
 				Token:     ch.Token,
 				Status:    ch.Status,
 				Validated: ch.Validated,

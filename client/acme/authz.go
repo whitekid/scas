@@ -10,7 +10,7 @@ import (
 )
 
 // Authz represents authorize service
-func (client *Client) Authz(endpoint string) *AuthzService {
+func (client *ACMEClient) Authz(endpoint string) *AuthzService {
 	return &AuthzService{
 		client:   client,
 		endpoint: endpoint,
@@ -18,7 +18,7 @@ func (client *Client) Authz(endpoint string) *AuthzService {
 }
 
 type AuthzService struct {
-	client   *Client
+	client   *ACMEClient
 	endpoint string
 }
 
@@ -43,8 +43,8 @@ func (s ChallengeStatus) String() string { return string(s) }
 type ChallengeType string
 
 const (
-	ChallengeHTTP01 ChallengeType = "http-01"
-	ChallengeDNS01  ChallengeType = "dns-01"
+	ChallengeTypeHttp01 ChallengeType = "http-01"
+	ChallengeTypeDns01  ChallengeType = "dns-01"
 )
 
 func (t ChallengeType) String() string { return string(t) }
@@ -52,7 +52,7 @@ func (t ChallengeType) String() string { return string(t) }
 type Challenge struct {
 	Type      ChallengeType         `json:"type" validate:"required"`
 	URL       string                `json:"url"`
-	Token     string                `json:"token" validate:"required,printascii"`
+	Token     string                `json:"token"`
 	Status    ChallengeStatus       `json:"status,omitempty" validate:"required"`
 	Validated *common.Timestamp     `json:"validated,omitempty"`
 	Error     *common.ProblemDetail `json:"error,omitempty"`
@@ -61,12 +61,17 @@ type Challenge struct {
 	RetryAfter *common.Timestamp `json:"-"`
 }
 
-type Authz struct {
+type AuthzResource struct {
 	Status     AuthzStatus       `json:"status"`
 	Expires    *common.Timestamp `json:"expires,omitempty"`
 	Identifier common.Identifier `json:"identifier" validation:"required,dive"`
 	Challenges []*Challenge      `json:"challenges"`
 	Wildcard   bool              `json:"wildcard,omitempty"`
+}
+
+type Authz struct {
+	AuthzResource
+	ID string
 }
 
 type AuthzStatus string
@@ -88,10 +93,16 @@ func (svc *AuthzService) Get(ctx context.Context) (*Authz, error) {
 		return nil, errors.Wrapf(err, "fail to request authorize")
 	}
 
-	authz := &Authz{}
-	if err := resp.JSON(authz); err != nil {
+	authz := Authz{}
+	if err := resp.JSON(&authz.AuthzResource); err != nil {
 		return nil, errors.Wrap(err, "fail to decode ressponse")
 	}
 
-	return authz, nil
+	u, err := resp.Location()
+	if err != nil {
+		return nil, errors.Wrap(err, "fail to parse response")
+	}
+	authz.ID = idFromURI(u.String())
+
+	return &authz, nil
 }

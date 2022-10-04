@@ -11,6 +11,7 @@ import (
 
 var (
 	ErrTermOfServiceChanged  = errors.New("terms of service have changed")
+	ErrProjectNotFound       = errors.New("project not found")
 	ErrOrderNotFound         = NewACMEError(http.StatusNotFound, `unknown`, "order not found")
 	ErrMultipleRecords       = errors.New("unexpected multiple records")
 	ErrMethodNotAllowed      = NewACMEError(http.StatusMethodNotAllowed, `malformed`, `method not allowed`)

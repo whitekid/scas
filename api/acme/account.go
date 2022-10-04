@@ -17,7 +17,7 @@ import (
 	"scas/pkg/helper"
 )
 
-func (s *Server) newAccount(c echo.Context) error {
+func (s *ACMEServer) newAccount(c echo.Context) error {
 	log.Debugf("newAccount()")
 
 	cc := c.(*Context)
@@ -36,13 +36,13 @@ func (s *Server) newAccount(c echo.Context) error {
 		return errors.Wrapf(err, "fail to create account")
 	}
 
-	acct.Orders = s.accountOrderListURL(acct.ID)
+	acct.Orders = s.accountOrderListURL(c, acct.ID)
 
-	c.Response().Header().Set(echo.HeaderLocation, s.accountURL(acct.ID))
+	c.Response().Header().Set(echo.HeaderLocation, s.accountURL(c, acct.ID))
 	return c.JSON(fx.Ternary(created, http.StatusCreated, http.StatusOK), &acct.AccountResource)
 }
 
-func (s *Server) validateAccountRequest(req *acmeclient.AccountRequest) error {
+func (s *ACMEServer) validateAccountRequest(req *acmeclient.AccountRequest) error {
 	allowedEmailDomains := []string{"@example.com"} // TODO project 마다 다른 설정으로 가야지...
 
 	// validate contact
@@ -67,7 +67,7 @@ func (s *Server) validateAccountRequest(req *acmeclient.AccountRequest) error {
 	return nil
 }
 
-func (s *Server) updateAccount(c echo.Context) error {
+func (s *ACMEServer) updateAccount(c echo.Context) error {
 	log.Debugf("updateAccount()")
 
 	cc := c.(*Context)
@@ -104,16 +104,16 @@ func (s *Server) updateAccount(c echo.Context) error {
 			return err
 		}
 
-		acct.Orders = s.accountOrderListURL(acct.ID)
+		acct.Orders = s.accountOrderListURL(c, acct.ID)
 
-		c.Response().Header().Set(echo.HeaderLocation, s.accountURL(acct.ID))
+		c.Response().Header().Set(echo.HeaderLocation, s.accountURL(c, acct.ID))
 		return c.JSON(http.StatusOK, &acct.AccountResource)
 	}
 
 	return store.ErrMalformed
 }
 
-func (s *Server) keyChange(c echo.Context) error {
+func (s *ACMEServer) keyChange(c echo.Context) error {
 	var req acmeclient.JOSERequest
 
 	if err := s.parseJOSEPayload(c, &req); err != nil {

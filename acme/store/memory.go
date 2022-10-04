@@ -46,6 +46,14 @@ func NewMemoryStore() *memoryStoreImpl {
 	return store
 }
 
+func (store *memoryStoreImpl) CreateProject(ctx context.Context, proj *Project) (*Project, error) {
+	panic("Not Implemented")
+}
+
+func (store *memoryStoreImpl) GetProject(ctx context.Context, projID string) (*Project, error) {
+	panic("Not Implemented")
+}
+
 func (store *memoryStoreImpl) CreateNonce(ctx context.Context) (string, error) {
 	nonce := shortuuid.New()
 

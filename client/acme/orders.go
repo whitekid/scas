@@ -81,7 +81,7 @@ type OrderRequest struct {
 	NotAfter    *common.Timestamp   `json:"notAfter.omitempty"`
 }
 
-func (client *Client) NewOrder(ctx context.Context, req *OrderRequest) (*Order, error) {
+func (client *ACMEClient) NewOrder(ctx context.Context, req *OrderRequest) (*Order, error) {
 	resp, err := client.sendJOSERequest(ctx, http.MethodPost, client.directory.NewOrder, req)
 	if err != nil {
 		return nil, errors.Wrapf(err, "fail to request new order")
@@ -101,7 +101,7 @@ func (client *Client) NewOrder(ctx context.Context, req *OrderRequest) (*Order, 
 	return order, nil
 }
 
-func (client *Client) Order(endpoint string) *OrderService {
+func (client *ACMEClient) Order(endpoint string) *OrderService {
 	return &OrderService{
 		client:   client,
 		endpoint: endpoint,
@@ -109,7 +109,7 @@ func (client *Client) Order(endpoint string) *OrderService {
 }
 
 type OrderService struct {
-	client   *Client
+	client   *ACMEClient
 	endpoint string
 }
 

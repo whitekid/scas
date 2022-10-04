@@ -86,6 +86,7 @@ func TestCertRevocation(t *testing.T) {
 	cert := testutils.Must1(client.Certificate(order.Certificate).Get(ctx))
 	require.NotEmpty(t, cert)
 
+	// TODO certificate가 동일한 것이 2개 만들어지는데...
 	err := client.Certificate(order.Certificate).Revoke(ctx, cert, x509types.RevokeUnspecified)
 	require.NoError(t, err)
 

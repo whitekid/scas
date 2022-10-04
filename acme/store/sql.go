@@ -2,17 +2,15 @@ package store
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
-	"strings"
 	"time"
 
-	"github.com/lithammer/shortuuid/v4"
 	"github.com/pkg/errors"
 	"github.com/whitekid/goxp"
 	"github.com/whitekid/goxp/fx"
 	"github.com/whitekid/goxp/log"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"gorm.io/gorm/schema"
 
 	"scas/acme/store/models"
@@ -44,11 +42,94 @@ func NewSQLStore(dburl string) Interface {
 	return &sqlStoreImpl{db: db}
 }
 
-func (s *sqlStoreImpl) CreateNonce(ctx context.Context) (string, error) {
-	ID := shortuuid.New()
+type Project struct {
+	ID                      string
+	Name                    string
+	CreatedAt               time.Time
+	CAAIdentities           []string
+	ExternalAccountRequired bool
+}
 
+func (s *sqlStoreImpl) CreateProject(ctx context.Context, proj *Project) (*Project, error) {
+	if err := helper.ValidateStruct(proj); err != nil {
+		return nil, err
+	}
+
+	acctRef := &models.Project{
+		Name: proj.Name,
+	}
+
+	if tx := s.db.WithContext(ctx).Create(acctRef); tx.Error != nil {
+		return nil, gormx.ConvertSQLError(tx.Error)
+	}
+
+	return modelsToProject(acctRef), nil
+}
+
+type ListProjectOpts struct {
+	ID string
+}
+
+func (s *sqlStoreImpl) ListProject(ctx context.Context, opts ListProjectOpts) ([]*Project, error) {
+	results, err := s.listProject(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	return fx.Map(results, func(m *models.Project) *Project { return modelsToProject(m) }), nil
+}
+
+func (s *sqlStoreImpl) listProject(ctx context.Context, opts ListProjectOpts) ([]*models.Project, error) {
+	w := &models.Project{
+		ID: opts.ID,
+	}
+
+	var results []*models.Project
+	if tx := s.db.WithContext(ctx).Order("created_at").Find(&results, w); tx.Error != nil {
+		return nil, gormx.ConvertSQLError(tx.Error)
+	}
+
+	return results, nil
+}
+
+func (s *sqlStoreImpl) getProject(ctx context.Context, projID string) (*models.Project, error) {
+	projects, err := s.listProject(ctx, ListProjectOpts{
+		ID: projID,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	switch len(projects) {
+	case 0:
+		return nil, ErrProjectNotFound // TODO error handdling to 404 not found
+	case 1:
+		return projects[0], nil
+	default:
+		return nil, ErrMultipleRecords
+	}
+}
+
+func (s *sqlStoreImpl) GetProject(ctx context.Context, projID string) (*Project, error) {
+	proj, err := s.getProject(ctx, projID)
+	if err != nil {
+		return nil, err
+	}
+	return modelsToProject(proj), nil
+}
+
+func modelsToProject(proj *models.Project) *Project {
+	return &Project{
+		ID:                      proj.ID,
+		Name:                    proj.Name,
+		CreatedAt:               proj.CreatedAt,
+		CAAIdentities:           proj.CAAIdentities,
+		ExternalAccountRequired: proj.ExternalAccountRequired,
+	}
+}
+
+func (s *sqlStoreImpl) CreateNonce(ctx context.Context) (string, error) {
 	nonce := &models.Nonce{
-		ID:     ID,
 		Expire: time.Now().UTC().Add(nonceTimeout),
 	}
 
@@ -78,11 +159,10 @@ func (s *sqlStoreImpl) CreateAccount(ctx context.Context, acct *Account) (*Accou
 	}
 
 	acctRef := &models.Account{
-		ID:                  shortuuid.New(),
 		Key:                 acct.Key,
-		TermAgreeAt:         &acct.TermAgreeAt,
+		TermAgreeAt:         fx.TernaryCF(acct.TermAgreeAt.IsZero(), func() *time.Time { return nil }, func() *time.Time { return &acct.TermAgreeAt }),
 		Status:              acct.Status.String(),
-		Contacts:            strings.Join(acct.Contact, ","),
+		Contacts:            acct.Contact,
 		TermOfServiceAgreed: acct.TermOfServiceAgreed,
 	}
 
@@ -97,12 +177,12 @@ func modelsToAccount(acct *models.Account) *Account {
 	return &Account{
 		AccountResource: acmeclient.AccountResource{
 			Status:              acmeclient.AccountStatus(acct.Status),
-			Contact:             fx.Ternary(len(acct.Contacts) > 0, strings.Split(acct.Contacts, ","), nil),
+			Contact:             acct.Contacts,
 			TermOfServiceAgreed: acct.TermOfServiceAgreed,
 		},
 		ID:          acct.ID,
 		Key:         acct.Key,
-		TermAgreeAt: *acct.TermAgreeAt,
+		TermAgreeAt: fx.TernaryCF(acct.TermAgreeAt == nil, func() time.Time { return time.Time{} }, func() time.Time { return *acct.TermAgreeAt }),
 	}
 }
 
@@ -189,7 +269,7 @@ func (s *sqlStoreImpl) updateAccount(ctx context.Context, acctID string, fn func
 		return nil, err
 	}
 
-	if tx := s.db.Save(acct); tx.Error != nil {
+	if tx := s.db.Omit(clause.Associations).Save(acct); tx.Error != nil {
 		return nil, tx.Error
 	}
 
@@ -198,7 +278,7 @@ func (s *sqlStoreImpl) updateAccount(ctx context.Context, acctID string, fn func
 
 func (s *sqlStoreImpl) UpdateAccountContact(ctx context.Context, acctID string, contacts []string) (*Account, error) {
 	return s.updateAccount(ctx, acctID, func(acct *models.Account) error {
-		acct.Contacts = strings.Join(contacts, ",")
+		acct.Contacts = contacts
 		return nil
 	})
 }
@@ -217,15 +297,34 @@ func (s *sqlStoreImpl) UpdateAccountStatus(ctx context.Context, acctID string, s
 	})
 }
 
+func identifierToModel(idents common.Identifier) models.Identifier {
+	return models.NewIdentifier([]models.Ident{
+		{
+			Type:  idents.Type.String(),
+			Value: idents.Value,
+		},
+	})
+}
+
+func identifiersToModel(idents []common.Identifier) models.Identifier {
+	return models.NewIdentifier(fx.Map(idents,
+		func(i common.Identifier) models.Ident {
+			return models.Ident{
+				Type:  i.Type.String(),
+				Value: i.Value,
+			}
+		}))
+}
+
 func (s *sqlStoreImpl) CreateOrder(ctx context.Context, order *Order) (*Order, error) {
 	if err := helper.ValidateStruct(order); err != nil {
 		return nil, err
 	}
 
 	orderRef := &models.Order{
-		ID:        shortuuid.New(),
-		AccountID: order.AccountID,
-		Status:    order.Status.String(),
+		AccountID:   order.AccountID,
+		Status:      order.Status.String(),
+		Identifiers: identifiersToModel(order.Identifiers),
 	}
 
 	goxp.IfThen(order.Expires != nil, func() { orderRef.Expires = &order.Expires.Time })
@@ -240,20 +339,6 @@ func (s *sqlStoreImpl) CreateOrder(ctx context.Context, order *Order) (*Order, e
 
 	if tx := s.db.WithContext(ctx).Create(orderRef); tx.Error != nil {
 		return nil, errors.Wrap(gormx.ConvertSQLError(tx.Error), "order create failed")
-	}
-
-	for _, ident := range order.Identifiers {
-		identRef := &models.Identifier{
-			OrderID: &orderRef.ID,
-			Type:    ident.Type.String(),
-			Value:   ident.Value,
-		}
-
-		if tx := s.db.WithContext(ctx).Create(identRef); tx.Error != nil {
-			// TODO cleanup order records with transactions
-			return nil, errors.Wrap(gormx.ConvertSQLError(tx.Error), "identifier create failed")
-		}
-		orderRef.Identifiers = append(orderRef.Identifiers, *identRef)
 	}
 
 	return modelsToOrder(orderRef), nil
@@ -278,7 +363,7 @@ func (s *sqlStoreImpl) listOrder(ctx context.Context, opts ListOrderOpts) ([]*mo
 	}
 
 	var results []*models.Order
-	if tx := s.db.WithContext(ctx).Order("created_at").Preload("Identifiers").Preload("Authz").Preload("Certificate").Find(&results, w); tx.Error != nil {
+	if tx := s.db.WithContext(ctx).Order("created_at").Preload(clause.Associations).Find(&results, w); tx.Error != nil {
 		return nil, gormx.ConvertSQLError(tx.Error)
 	}
 
@@ -299,7 +384,7 @@ func modelsToOrder(order *models.Order) *Order {
 			OrderResource: acmeclient.OrderResource{
 				Status:      acmeclient.OrderStatus(order.Status),
 				Expires:     timeToTimestamp(order.Expires),
-				Identifiers: fx.Map(order.Identifiers, func(x models.Identifier) common.Identifier { return modelsToIdentifier(&x) }),
+				Identifiers: modelsToIdentifier(order.Identifiers),
 				NotBefore:   timeToTimestamp(order.NotBefore),
 				NotAfter:    timeToTimestamp(order.NotAfter),
 				Authz:       fx.Map(order.Authz, func(authz models.Authz) string { return authz.ID }),
@@ -320,11 +405,13 @@ func modelsToOrder(order *models.Order) *Order {
 	return ref
 }
 
-func modelsToIdentifier(ident *models.Identifier) common.Identifier {
-	return common.Identifier{
-		Type:  common.IdentifierType(ident.Type),
-		Value: ident.Value,
-	}
+func modelsToIdentifier(ident models.Identifier) []common.Identifier {
+	return fx.Map(ident.Idents, func(ident models.Ident) common.Identifier {
+		return common.Identifier{
+			Type:  common.IdentifierType(ident.Type),
+			Value: ident.Value,
+		}
+	})
 }
 
 func (s *sqlStoreImpl) GetOrder(ctx context.Context, orderID string) (*Order, error) {
@@ -364,7 +451,7 @@ func (s *sqlStoreImpl) updateOrder(ctx context.Context, orderID string, fn func(
 		return nil, err
 	}
 
-	if tx := s.db.WithContext(ctx).Preload("Identifiers").Preload("Authz").Preload("Certificate").Save(order); tx.Error != nil {
+	if tx := s.db.WithContext(ctx).Omit(clause.Associations).Save(order); tx.Error != nil {
 		return nil, gormx.ConvertSQLError(tx.Error)
 	}
 
@@ -384,49 +471,34 @@ func (s *sqlStoreImpl) CreateAuthz(ctx context.Context, authz *Authz) (*Authz, e
 	}
 
 	authzRef := authzToModel(authz)
-	authzRef.ID = shortuuid.New()
 	if tx := s.db.WithContext(ctx).Create(authzRef); tx.Error != nil {
 		return nil, errors.Wrap(gormx.ConvertSQLError(tx.Error), "authorization create failed")
 	}
-
-	identRef := &models.Identifier{
-		ID:      shortuuid.New(),
-		AuthzID: &authzRef.ID,
-		Type:    authz.Identifier.Type.String(),
-		Value:   authz.Identifier.Value,
-	}
-
-	if tx := s.db.WithContext(ctx).Create(identRef); tx.Error != nil {
-		// TODO cleanup order records with transactions
-		return nil, errors.Wrap(gormx.ConvertSQLError(tx.Error), "identifier create failed")
-	}
-	authzRef.Identifier = *identRef
 
 	return modelToAuthz(authzRef), nil
 }
 
 func authzToModel(authz *Authz) *models.Authz {
 	return &models.Authz{
-		ID:        authz.ID,
-		AccountID: authz.AccountID,
-		OrderID:   authz.OrderID,
-		Status:    authz.Status.String(),
-		Expires:   timestampToTime(authz.Expires),
-		Wildcard:  authz.Wildcard,
+		ID:         authz.ID,
+		AccountID:  authz.AccountID,
+		OrderID:    authz.OrderID,
+		Status:     authz.Status.String(),
+		Expires:    timestampToTime(authz.Expires),
+		Wildcard:   authz.Wildcard,
+		Identifier: identifierToModel(authz.Identifier),
 	}
 }
 
 func modelToAuthz(authz *models.Authz) *Authz {
+	idents := modelsToIdentifier(authz.Identifier)
 	return &Authz{
-		ID:        authz.ID,
-		AccountID: authz.AccountID,
-		OrderID:   authz.OrderID,
-		Status:    acmeclient.AuthzStatus(authz.Status),
-		Expires:   common.NewTimestampP(authz.Expires),
-		Identifier: common.Identifier{
-			Type:  common.IdentifierType(authz.Identifier.Type),
-			Value: authz.Identifier.Value,
-		},
+		ID:         authz.ID,
+		AccountID:  authz.AccountID,
+		OrderID:    authz.OrderID,
+		Status:     acmeclient.AuthzStatus(authz.Status),
+		Expires:    common.NewTimestampP(authz.Expires),
+		Identifier: fx.TernaryCF(len(idents) > 0, func() common.Identifier { return idents[0] }, func() common.Identifier { return common.Identifier{} }),
 		Challenges: fx.Map(authz.Challenges, func(ch *models.Challenge) *Challenge { return modelsToChallenge(ch) }),
 		Wildcard:   false,
 	}
@@ -455,7 +527,7 @@ func (s *sqlStoreImpl) listAuthz(ctx context.Context, opts ListAuthzOpts) ([]*mo
 	}
 
 	var results []*models.Authz
-	if tx := s.db.WithContext(ctx).Order("created_at").Preload("Identifier").Preload("Challenges").Find(&results, w); tx.Error != nil {
+	if tx := s.db.WithContext(ctx).Order("created_at").Preload(clause.Associations).Find(&results, w); tx.Error != nil {
 		return nil, gormx.ConvertSQLError(tx.Error)
 	}
 
@@ -463,13 +535,14 @@ func (s *sqlStoreImpl) listAuthz(ctx context.Context, opts ListAuthzOpts) ([]*mo
 }
 
 func modelsToAuthz(authz *models.Authz) *Authz {
+	idents := modelsToIdentifier(authz.Identifier)
 	return &Authz{
 		ID:         authz.ID,
 		AccountID:  authz.AccountID,
 		OrderID:    authz.OrderID,
 		Status:     acmeclient.AuthzStatus(authz.Status),
 		Expires:    common.NewTimestampP(authz.Expires),
-		Identifier: modelsToIdentifier(&authz.Identifier),
+		Identifier: fx.TernaryCF(len(idents) > 0, func() common.Identifier { return idents[0] }, func() common.Identifier { return common.Identifier{} }),
 		Challenges: fx.Map(authz.Challenges, func(ch *models.Challenge) *Challenge { return modelsToChallenge(ch) }),
 		Wildcard:   false,
 	}
@@ -537,7 +610,7 @@ func (s *sqlStoreImpl) updateAuthz(ctx context.Context, authzID string, fn func(
 		return nil, err
 	}
 
-	if tx := s.db.Save(authz); tx.Error != nil {
+	if tx := s.db.Omit(clause.Associations).Save(authz); tx.Error != nil {
 		return nil, gormx.ConvertSQLError(tx.Error)
 	}
 
@@ -614,7 +687,6 @@ func (s *sqlStoreImpl) CreateChallenge(ctx context.Context, chal *Challenge) (*C
 	}
 
 	chalRef := &models.Challenge{
-		ID:        shortuuid.New(),
 		AuthzID:   chal.AuthzID,
 		Type:      chal.Type.String(),
 		Token:     chal.Token,
@@ -636,7 +708,7 @@ func (s *sqlStoreImpl) updateChallenge(ctx context.Context, chalID string, updat
 	}
 
 	if updateFn(chal) {
-		if tx := s.db.WithContext(ctx).Save(chal); tx.Error != nil {
+		if tx := s.db.WithContext(ctx).Omit(clause.Associations).Save(chal); tx.Error != nil {
 			return nil, gormx.ConvertSQLError(tx.Error)
 		}
 	}
@@ -742,17 +814,17 @@ func (s *sqlStoreImpl) getCertificate(ctx context.Context, ID string) (*models.C
 }
 
 func (s *sqlStoreImpl) CreateCertificate(ctx context.Context, cert *Certificate) (*Certificate, error) {
+	log.Debugf("CreateCertificate()")
+
 	if err := helper.ValidateStruct(cert); err != nil {
 		return nil, err
 	}
 
 	ref := &models.Certificate{
-		ID:      shortuuid.New(),
 		Chain:   cert.Chain,
 		OrderID: cert.OrderID,
-		Hash:    hex.EncodeToString(helper.SHA256Sum(cert.Chain)),
 	}
-	if tx := s.db.WithContext(ctx).Save(ref); tx.Error != nil {
+	if tx := s.db.WithContext(ctx).Omit(clause.Associations).Save(ref); tx.Error != nil {
 		return nil, gormx.ConvertSQLError(tx.Error)
 	}
 
@@ -760,7 +832,7 @@ func (s *sqlStoreImpl) CreateCertificate(ctx context.Context, cert *Certificate)
 }
 
 func (s *sqlStoreImpl) GetCertificateBySum(ctx context.Context, hash string) (*Certificate, error) {
-	log.Debugf("GetCertificateBySum(): sum=%s, len=%d", hash, len(hash))
+	log.Debugf("GetCertificateBySum(): sum=%s,", hash)
 
 	certs, err := s.ListCertificate(ctx, ListCertificateOpts{
 		Hash: hash,
@@ -780,16 +852,17 @@ func (s *sqlStoreImpl) GetCertificateBySum(ctx context.Context, hash string) (*C
 }
 
 func (s *sqlStoreImpl) RevokeCertificate(ctx context.Context, certID string, reason x509types.RevokeReason) (*Certificate, error) {
+	log.Debugf("RevokeCertificate(): ID=%s, reason=%s", certID, reason)
+
 	cert, err := s.getCertificate(ctx, certID)
 	if err != nil {
 		return nil, err
 	}
 
 	cert.RevokeReason = reason.String()
-	t := time.Now().UTC()
-	cert.RevokedAt = &t
+	cert.RevokedAt = helper.NowP()
 
-	if tx := s.db.Save(cert); tx.Error != nil {
+	if tx := s.db.Omit(clause.Associations).Save(cert); tx.Error != nil {
 		return nil, tx.Error
 	}
 

@@ -2,45 +2,18 @@ package acme
 
 import (
 	"context"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"net/http"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
-	"scas/acme/manager"
 	acmeclient "scas/client/acme"
-	"scas/client/common"
+	"scas/pkg/helper/x509x"
 	"scas/pkg/testutils"
 )
-
-type fixture struct {
-	*acmeclient.Client
-	manager *manager.Manager
-	acct    *acmeclient.Account
-	order   *acmeclient.Order
-}
-
-func setupFixture(ctx context.Context, t *testing.T) *fixture {
-	priv := generateKey(t)
-
-	server := newTestServer(ctx, t)
-	client := testutils.Must1(acmeclient.New(server.URL, priv))
-
-	acct := testutils.Must1(client.NewAccount(ctx, &acmeclient.AccountRequest{Contact: []string{"mailto:hello@example.com"}}))
-	order := testutils.Must1(client.NewOrder(ctx, &acmeclient.OrderRequest{
-		Identifiers: []common.Identifier{{Type: common.IdentifierDNS, Value: "test.charlie.127.0.0.1.sslip.io"}},
-		NotBefore:   common.TimestampNow().Truncate(time.Hour*24).AddDate(0, 0, -7),
-		NotAfter:    common.TimestampNow().Truncate(time.Hour*24).AddDate(0, 1, 0),
-	}))
-
-	return &fixture{
-		Client:  client,
-		manager: server.server.manager,
-		acct:    acct,
-		order:   order,
-	}
-}
 
 func TestNewOrder(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -61,6 +34,51 @@ func TestNewOrder(t *testing.T) {
 	}
 	require.Regexp(t, `^http.+/orders/.+/finalize$`, client.order.Finalize)
 	require.Empty(t, client.order.Certificate) // at first there is no certificate, until finialize order
+}
+
+func TestFinalizeOrder(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	type fields struct {
+	}
+	type args struct {
+	}
+	tests := [...]struct {
+		name    string
+		fields  fields
+		args    args
+		wantErr bool
+	}{
+		{`valid`, fields{}, args{}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := setupFixture(ctx, t)
+			authz := client.authzs[0]
+			chal := authz.Challenges[0]
+			require.NoError(t, client.manager.UpdateChallengeStatus(ctx, idFromURI(chal.URL), authz.ID, acmeclient.ChallengeStatusValid))
+
+			csr := &x509.CertificateRequest{
+				Subject: pkix.Name{
+					CommonName: client.order.Identifiers[0].Value,
+				},
+			}
+			finalizedOrder, err := client.Order(client.order.Finalize).Finalize(ctx, csr)
+			require.Truef(t, (err != nil) == tt.wantErr, `Finalize() failed: error = %+v, wantErr = %v`, err, tt.wantErr)
+
+			cert, err := client.Certificate(finalizedOrder.Certificate).Get(ctx)
+			require.NoError(t, err)
+
+			got, err := x509x.ParseCertificate(cert)
+			require.NoError(t, err)
+			require.Equal(t, csr.Subject.CommonName, got.Subject.CommonName)
+			require.Equal(t, client.order.NotAfter.Time, got.NotAfter)
+			require.Equal(t, client.order.NotBefore.Time, got.NotBefore)
+			require.Equal(t, x509.ECDSAWithSHA256.String(), got.SignatureAlgorithm.String()) // user의 public key algorithm
+			require.Equal(t, x509.ECDSA.String(), got.PublicKeyAlgorithm.String())
+		})
+	}
 }
 
 func TestChallengeRetry(t *testing.T) {

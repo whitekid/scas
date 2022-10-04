@@ -4,7 +4,7 @@ skinparam handwritten true
 Client -> Server: create project
 Client -> Server: create CA Pool
 Client -> Server: create root CA
-Client -> Server: create sobordinate CA
+Client -> Server: create subordinate CA
 Client -> Server: create server certficate
 Client -> Server: get server certficate
 
