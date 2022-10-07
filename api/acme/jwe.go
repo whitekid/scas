@@ -32,7 +32,7 @@ func (s *ACMEServer) parseJOSERequest(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 
 		ctx := c.Request().Context()
-		if !s.manager.ValidNonce(ctx, cc.header.Nonce) {
+		if !s.manager.ValidNonce(ctx, cc.projectID, cc.header.Nonce) {
 			return store.ErrBadNonce
 		}
 
@@ -41,7 +41,7 @@ func (s *ACMEServer) parseJOSERequest(next echo.HandlerFunc) echo.HandlerFunc {
 			return errors.Wrapf(store.ErrJOSEHeaderDecodeFail, err.Error())
 		}
 
-		acct, err := s.manager.VerifySignature(ctx, cc.header.JWK, cc.header.KID, req.Signature, req.Protected, req.Payload)
+		acct, err := s.manager.VerifySignature(ctx, cc.project.ID, cc.header.JWK, cc.header.KID, req.Signature, req.Protected, req.Payload)
 		if err != nil {
 			return err
 		}
@@ -56,7 +56,7 @@ func (s *ACMEServer) checkValidAccount(next echo.HandlerFunc) echo.HandlerFunc {
 		cc := c.(*Context)
 
 		if cc.header.JWK != "" {
-			if acct, err := s.manager.GetAccountByKey(c.Request().Context(), cc.header.JWK); err == nil {
+			if acct, err := s.manager.GetAccountByKey(c.Request().Context(), cc.project.ID, cc.header.JWK); err == nil {
 				cc.account = acct
 			}
 		}

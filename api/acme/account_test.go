@@ -2,7 +2,6 @@ package acme
 
 import (
 	"context"
-	"crypto/x509"
 	"testing"
 	"time"
 
@@ -10,41 +9,7 @@ import (
 
 	acmeclient "scas/client/acme"
 	"scas/client/common"
-	"scas/pkg/helper/x509x"
-	"scas/pkg/testutils"
 )
-
-func newFixture(t *testing.T, ctx context.Context) *Fixture {
-	server := newTestServer(ctx, t)
-	client := acmeclient.NewClient(server.URL, nil)
-	proj := testutils.Must1(client.Projects().Create(ctx, &acmeclient.Project{Name: "test"}))
-
-	priv := generateKey(t)
-	acme := testutils.Must1(client.ACME(proj.ACMEEndpoint, priv))
-	acct := testutils.Must1(acme.NewAccount(ctx, &acmeclient.AccountRequest{Contact: []string{"mailto:hello@example.com"}}))
-
-	return &Fixture{
-		ACMEClient: acme,
-		server:     server,
-		acct:       acct,
-	}
-}
-
-type Fixture struct {
-	*acmeclient.ACMEClient
-	server *TestServer
-	acct   *acmeclient.Account
-}
-
-func generateKey(t *testing.T) []byte {
-	privateKey, err := x509x.GenerateKey(x509.ECDSAWithSHA256)
-	require.NoError(t, err)
-
-	keyDerBytes, err := x509x.EncodePrivateKeyToPEM(privateKey)
-	require.NoError(t, err)
-
-	return keyDerBytes
-}
 
 func TestNewAccount(t *testing.T) {
 	type args struct {

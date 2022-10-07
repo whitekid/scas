@@ -46,7 +46,7 @@ type Context struct {
 	header    acmeclient.JOSEHeader
 	account   *store.Account // current account information if requested with KID header
 	projectID string
-	project   *store.Project
+	project   *store.Project // valid if request has :project_id parameter
 }
 
 func customContext(next echo.HandlerFunc) echo.HandlerFunc {
@@ -64,6 +64,7 @@ func (s *Server) Route(e *echo.Group) {
 	e.Use(s.errorHandler)
 
 	extractProjectID := helper.ExtractParam("project_id", func(c echo.Context, val string) { c.(*Context).projectID = val })
+
 	e.Use(extractProjectID)
 
 	s.acme = &ACMEServer{
@@ -72,16 +73,17 @@ func (s *Server) Route(e *echo.Group) {
 
 	e.POST("/", s.createProject)
 	e.GET("/:project_id", s.getProject, s.acme.checkValidProject)
+	e.POST("/:project_id/term", s.updateTerm, s.acme.checkValidProject)
+	e.GET("/:project_id/term", s.getTerm, s.acme.checkValidProject)
 
-	// TODO addNonce는 Group으로
 	acme := e.Group("/acme/:project_id", extractProjectID, s.acme.checkValidProject)
 	acme.GET("/directory", s.acme.getDirectory)
 	acme.HEAD("/new-nonce", s.acme.newNonce, s.acme.addNonce)
 	acme.POST("/new-account", s.acme.newAccount, s.acme.parseJOSERequest, s.acme.addNonce)
 	acme.GET("/new-account", s.methodNotAllowed)
-	acme.POST("/accounts/:acct_id", s.acme.updateAccount, s.acme.parseJOSERequest, s.acme.checkValidAccount, s.acme.addNonce)
+	acme.POST("/accounts/:acct_id", s.acme.updateAccount, s.acme.parseJOSERequest, s.acme.checkValidAccount, s.extractAccountID, s.acme.addNonce)
 	acme.GET("/accounts/:acct_id", s.methodNotAllowed)
-	acme.POST("/accounts/:acct_id/orders", s.notImplemented, s.acme.parseJOSERequest, s.acme.checkValidAccount, s.acme.addNonce)
+	acme.POST("/accounts/:acct_id/orders", s.notImplemented, s.acme.parseJOSERequest, s.acme.checkValidAccount, s.extractAccountID, s.acme.addNonce)
 	acme.GET("/accounts/:acct_id/orders", s.methodNotAllowed)
 	acme.POST("/new-order", s.acme.newOrder, s.acme.parseJOSERequest, s.acme.checkValidAccount, s.acme.addNonce)
 	acme.GET("/new-order", s.methodNotAllowed)
@@ -99,6 +101,19 @@ func (s *Server) Route(e *echo.Group) {
 	acme.GET("/key-change", s.methodNotAllowed)
 }
 
+func (s *Server) extractAccountID(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		acctID := c.Param("acct_id")
+		cc := c.(*Context)
+
+		// 이미 KID 또는 JWK로 account 정보를 넘겼기 때문에 여기서는 확인만 한다.
+		if cc.account.ID != acctID {
+			return store.ErrAccountDoesNotExist
+		}
+
+		return next(c)
+	}
+}
 func (s *Server) Startup(ctx context.Context, addr string) {
 	s.addr = addr
 	s.acme.addr = addr + "/acme"

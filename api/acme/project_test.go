@@ -27,10 +27,9 @@ func TestProject(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			ts := newTestServer(ctx, t)
+			fixture := newFixture(t, ctx)
 
-			client := acmeclient.NewClient(ts.URL, nil)
-			proj, err := client.Projects().Create(ctx, tt.args.proj)
+			proj, err := fixture.client.Projects("").Create(ctx, tt.args.proj)
 			require.Truef(t, (err != nil) == tt.wantErr, `Projects.Create() failed: error = %+v, wantErr = %v`, err, tt.wantErr)
 
 			require.NotEmpty(t, proj.ID)
@@ -38,13 +37,29 @@ func TestProject(t *testing.T) {
 			require.NotEmpty(t, proj.CreatedAt)
 			require.Equal(t, tt.args.proj.Name, proj.Name)
 
-			got, err := client.Projects().Get(ctx, proj.ID)
+			got, err := fixture.client.Projects(proj.ID).Get(ctx)
 			require.NoError(t, err)
 			require.Equal(t, proj, got)
 
-			acme, err := client.ACME(proj.ACMEEndpoint, priv)
+			acme, err := fixture.client.ACME(proj.ACMEEndpoint, priv) // TODO 어라?... 없는 키 일텐데....
 			require.NoError(t, err)
 			_ = acme
 		})
 	}
+}
+
+func TestProjectTerms(t *testing.T) {
+	t.Skip()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	fixture := newFixture(t, ctx)
+
+	proj := fixture.proj
+	err := fixture.client.Projects(proj.ID).Term().Update(ctx, "updated term of service")
+	require.NoError(t, err)
+
+	term, err := fixture.client.Projects(proj.ID).Term().Get(ctx)
+	require.NoError(t, err)
+	require.NotEmpty(t, term)
 }

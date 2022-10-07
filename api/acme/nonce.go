@@ -17,7 +17,7 @@ const (
 func (s *ACMEServer) addNonce(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		if 200 <= c.Response().Status && c.Response().Status < 300 {
-			nonce, err := s.manager.NewNonce(c.Request().Context())
+			nonce, err := s.manager.NewNonce(c.Request().Context(), c.(*Context).projectID)
 			if err != nil {
 				return errors.Wrapf(err, "fail to create nonce")
 			}

@@ -23,7 +23,7 @@ import (
 
 type Fixture struct {
 	store.Interface
-
+	proj      *store.Project
 	acct      *store.Account
 	order     *store.Order
 	authz     *store.Authz
@@ -36,12 +36,18 @@ func setupFixture(ctx context.Context, t *testing.T) *Fixture {
 
 	s := store.NewSQLStore("sqlite://" + dbname + ".db")
 
+	proj, err := s.CreateProject(ctx, &store.Project{
+		Name: "test project",
+	})
+	require.NoError(t, err)
+
 	acct, err := s.CreateAccount(ctx, &store.Account{
 		AccountResource: acmeclient.AccountResource{
 			Status:  acmeclient.AccountStatusValid,
 			Contact: []string{"me@example.com"},
 		},
-		Key: base64.RawURLEncoding.EncodeToString(goxp.RandomByte(20)),
+		Key:       base64.RawURLEncoding.EncodeToString(goxp.RandomByte(20)),
+		ProjectID: proj.ID,
 	})
 	require.NoErrorf(t, err, "%+v", err)
 
@@ -54,6 +60,7 @@ func setupFixture(ctx context.Context, t *testing.T) *Fixture {
 				NotAfter:    common.TimestampNow(),
 			},
 		},
+		ProjectID: proj.ID,
 		AccountID: acct.ID,
 	})
 	require.NoErrorf(t, err, "%+v", err)
@@ -62,6 +69,7 @@ func setupFixture(ctx context.Context, t *testing.T) *Fixture {
 	var challenge *store.Challenge
 	for _, ident := range order.Identifiers {
 		authz, err = s.CreateAuthz(ctx, &store.Authz{
+			ProjectID:  proj.ID,
 			AccountID:  acct.ID,
 			OrderID:    order.ID,
 			Status:     acmeclient.AuthzStatusPending,
@@ -75,13 +83,15 @@ func setupFixture(ctx context.Context, t *testing.T) *Fixture {
 				Type:   acmeclient.ChallengeTypeHttp01,
 				Status: acmeclient.ChallengeStatusPending,
 			},
-			AuthzID: authz.ID,
+			ProjectID: proj.ID,
+			AuthzID:   authz.ID,
 		})
 		require.NoError(t, err)
 	}
 
 	return &Fixture{
 		Interface: s,
+		proj:      proj,
 		acct:      acct,
 		order:     order,
 		authz:     authz,

@@ -253,7 +253,7 @@ func (c *Challenger) challangeHttp01(ctx context.Context, chal *store.Challenge,
 		return store.ErrIncorrectResponse
 	}
 
-	acct, err := c.store.GetAccount(ctx, authz.AccountID)
+	acct, err := c.store.GetAccount(ctx, authz.ProjectID, authz.AccountID)
 	if err != nil {
 		return err
 	}
@@ -289,7 +289,7 @@ func (c *Challenger) challengeDns01(ctx context.Context, chal *store.Challenge, 
 		return errors.Wrapf(store.ErrIncorrectResponse, "%s", err)
 	}
 
-	acct, err := c.store.GetAccount(ctx, authz.AccountID)
+	acct, err := c.store.GetAccount(ctx, authz.ProjectID, authz.AccountID)
 	if err != nil {
 		return err
 	}
