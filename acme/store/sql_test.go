@@ -19,6 +19,7 @@ import (
 
 type testSQL struct {
 	*sqlStoreImpl
+	proj  *Project
 	acct  *Account
 	order *Order
 	authz *Authz
@@ -37,12 +38,15 @@ func newFixture(ctx context.Context, t *testing.T, scheme string) *testSQL {
 
 	s := NewSQLStore(dburl).(*sqlStoreImpl)
 
+	proj := testutils.Must1(s.CreateProject(ctx, &Project{Name: "test project"}))
+
 	acct := testutils.Must1(s.CreateAccount(ctx, &Account{
 		AccountResource: acmeclient.AccountResource{
 			Status:  acmeclient.AccountStatusValid,
 			Contact: []string{"mailto:hello@example.com"},
 		},
-		Key: goxp.RandomString(10),
+		Key:       goxp.RandomString(10),
+		ProjectID: proj.ID,
 	}))
 
 	order := testutils.Must1(s.CreateOrder(ctx, &Order{
@@ -55,10 +59,12 @@ func newFixture(ctx context.Context, t *testing.T, scheme string) *testSQL {
 			},
 		},
 		AccountID: acct.ID,
+		ProjectID: proj.ID,
 	}))
 
 	authz, err := s.CreateAuthz(ctx, &Authz{
 		AccountID:  acct.ID,
+		ProjectID:  proj.ID,
 		OrderID:    order.ID,
 		Status:     acmeclient.AuthzStatusPending,
 		Identifier: common.Identifier{Type: common.IdentifierDNS, Value: "server1.acme.127.0.0.1.sslip.io"},
@@ -72,13 +78,21 @@ func newFixture(ctx context.Context, t *testing.T, scheme string) *testSQL {
 			Type:   acmeclient.ChallengeTypeHttp01,
 			Status: acmeclient.ChallengeStatusPending,
 		},
-		AuthzID: authz.ID,
+		AuthzID:   authz.ID,
+		ProjectID: proj.ID,
 	})
 	require.NoError(t, err)
 	require.NotEmpty(t, chal.ID)
 
+	_ = testutils.Must1(s.CreateCertificate(ctx, &Certificate{
+		ProjectID: proj.ID,
+		OrderID:   order.ID,
+		Chain:     goxp.RandomByte(20),
+	}))
+
 	return &testSQL{
 		sqlStoreImpl: s,
+		proj:         proj,
 		acct:         acct,
 		order:        order,
 		authz:        authz,
@@ -91,19 +105,19 @@ func TestNonce(t *testing.T) {
 
 	s := newFixture(ctx, t, "sqlite")
 
-	nonce, err := s.CreateNonce(ctx)
+	nonce, err := s.CreateNonce(ctx, s.proj.ID)
 	require.NoError(t, err)
 	require.NotEmpty(t, nonce)
 
-	require.True(t, s.ValidNonce(ctx, nonce))
+	require.True(t, s.ValidNonce(ctx, s.proj.ID, nonce))
 
 	// create another nonce
-	nonce2, err := s.CreateNonce(ctx)
+	nonce2, err := s.CreateNonce(ctx, s.proj.ID)
 	require.NoError(t, err)
 
 	// expire nonce
-	require.NoError(t, s.db.Model(&models.Nonce{ID: nonce2}).Update("expire", time.Now().UTC().Add(-time.Hour)).Error)
-	require.False(t, s.ValidNonce(ctx, nonce2))
+	require.NoError(t, s.db.Model(&models.Nonce{ID: nonce2, ProjectID: s.proj.ID}).Update("expire", time.Now().UTC().Add(-time.Hour)).Error)
+	require.False(t, s.ValidNonce(ctx, s.proj.ID, nonce2))
 
 	require.NoError(t, s.CleanupExpiredNonce(ctx))
 
@@ -111,8 +125,8 @@ func TestNonce(t *testing.T) {
 	require.NoError(t, s.db.Model(&models.Nonce{}).Count(&nonceCount).Error)
 	require.Equal(t, int64(1), nonceCount)
 
-	require.True(t, s.ValidNonce(ctx, nonce))
-	require.False(t, s.ValidNonce(ctx, nonce2))
+	require.True(t, s.ValidNonce(ctx, s.proj.ID, nonce))
+	require.False(t, s.ValidNonce(ctx, s.proj.ID, nonce2))
 }
 
 func TestAccount(t *testing.T) {
@@ -122,13 +136,13 @@ func TestAccount(t *testing.T) {
 	s := newFixture(ctx, t, "sqlite")
 
 	{
-		got, err := s.GetAccount(ctx, s.acct.ID)
+		got, err := s.GetAccount(ctx, s.proj.ID, s.acct.ID)
 		require.NoError(t, err)
 		require.Equal(t, s.acct, got)
 	}
 
 	{
-		got, err := s.GetAccountByKey(ctx, s.acct.Key)
+		got, err := s.GetAccountByKey(ctx, s.proj.ID, s.acct.Key)
 		require.NoError(t, err)
 		require.Equal(t, s.acct, got)
 	}
@@ -151,6 +165,7 @@ func TestOrder(t *testing.T) {
 				NotBefore:   common.TimestampNow().AddDate(0, 1, 0),
 			},
 		},
+		ProjectID: s.proj.ID,
 		AccountID: s.acct.ID,
 	})
 	require.NoError(t, err)
@@ -160,6 +175,7 @@ func TestOrder(t *testing.T) {
 
 	for _, ident := range order.Identifiers {
 		authz, err := s.CreateAuthz(ctx, &Authz{
+			ProjectID: s.proj.ID,
 			AccountID: s.acct.ID,
 			OrderID:   order.ID,
 			Status:    acmeclient.AuthzStatusPending,
@@ -174,7 +190,8 @@ func TestOrder(t *testing.T) {
 		order.Authz = append(order.Authz, authz.ID)
 
 		chal, err := s.CreateChallenge(ctx, &Challenge{
-			AuthzID: authz.ID,
+			ProjectID: s.proj.ID,
+			AuthzID:   authz.ID,
 			Challenge: &acmeclient.Challenge{
 				Type:   acmeclient.ChallengeTypeHttp01,
 				Status: acmeclient.ChallengeStatusPending,
@@ -214,8 +231,9 @@ func TestAuthz(t *testing.T) {
 	require.NotEmpty(t, got.Challenges)
 
 	cert, err := s.CreateCertificate(ctx, &Certificate{
-		OrderID: s.order.ID,
-		Chain:   goxp.RandomByte(100),
+		ProjectID: s.proj.ID,
+		OrderID:   s.order.ID,
+		Chain:     goxp.RandomByte(100),
 	})
 	require.NoError(t, err)
 	require.NotEmpty(t, cert.ID)
@@ -249,6 +267,7 @@ func TestChallengeValidate(t *testing.T) {
 			s := newFixture(ctx, t, "sqlite")
 
 			tt.args.challenge.AuthzID = s.authz.ID
+			tt.args.challenge.ProjectID = s.proj.ID
 			got, err := s.CreateChallenge(ctx, tt.args.challenge)
 			if gormx.IsSQLError(err) {
 				return
@@ -258,5 +277,4 @@ func TestChallengeValidate(t *testing.T) {
 			_ = got
 		})
 	}
-
 }

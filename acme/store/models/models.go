@@ -28,6 +28,13 @@ type Project struct {
 	Website                 string     // TODO
 	CAAIdentities           Strings    `gorm:"size:255"`
 	ExternalAccountRequired bool
+
+	Nonces       []Nonce       `gorm:"foreignKey:ProjectID"`
+	Accounts     []Account     `gorm:"foreignKey:ProjectID"`
+	Orders       []Order       `gorm:"foreignKey:ProjectID"`
+	Authzs       []Authz       `gorm:"foreignKey:ProjectID"`
+	Challenges   []Challenge   `gorm:"foreignKey:ProjectID"`
+	Certificates []Certificate `gorm:"foreignKey:ProjectID"`
 }
 
 func (p *Project) BeforeCreate(tx *gorm.DB) error {
@@ -39,8 +46,9 @@ func (p *Project) BeforeCreate(tx *gorm.DB) error {
 type Nonce struct {
 	gorm.Model
 
-	ID     string `gorm:"primaryKey;size:22;check:id <> ''"`
-	Expire time.Time
+	ProjectID string `gorm:"not null;size:22;uniqueIndex:idx_nonce_proj_id;check:project_id<>''" validate:"required"`
+	ID        string `gorm:"primaryKey;size:22;uniqueIndex:idx_nonce_proj_id;check:id <> ''"`
+	Expire    time.Time
 }
 
 func (n *Nonce) BeforeCreate(tx *gorm.DB) error { return genID(&n.ID) }
@@ -48,7 +56,8 @@ func (n *Nonce) BeforeCreate(tx *gorm.DB) error { return genID(&n.ID) }
 type Account struct {
 	gorm.Model
 
-	ID                  string  `gorm:"primaryKey;not null;size:32;check:id <> ''"`
+	ID                  string  `gorm:"primaryKey;not null;size:32;uniqueIndex:idx_acct_proj_id;check:id <> ''"`
+	ProjectID           string  `gorm:"not null;size:22;uniqueIndex:idx_acct_proj_id;check:project_id<>''" validate:"required"`
 	Key                 string  `gorm:"uniqueIndex;size:2048" validate:"required"`
 	Status              string  `gorm:"size:10" validate:"required"`
 	Contacts            Strings `gorm:"size:250;not null;check:contacts <> ''" validate:"required"`
@@ -63,7 +72,8 @@ func (acct *Account) BeforeCreate(tx *gorm.DB) error { return genID(&acct.ID) }
 type Order struct {
 	gorm.Model
 
-	ID          string `gorm:"primaryKey;size:32;check:id <> ''"`
+	ID          string `gorm:"primaryKey;size:32;uniqueIndex:idx_order_proj_id;check:id <> ''"`
+	ProjectID   string `gorm:"not null;size:22;uniqueIndex:idx_order_proj_id;check:project_id<>''" validate:"required"`
 	AccountID   string `validate:"required"`
 	Status      string `gorm:"size:100" validate:"required"`
 	Expires     *time.Time
@@ -80,7 +90,8 @@ func (o *Order) BeforeCreate(tx *gorm.DB) error { return genID(&o.ID) }
 type Authz struct {
 	gorm.Model
 
-	ID        string `gorm:"primaryKey;size=36;check:id <> ''"`
+	ID        string `gorm:"primaryKey;size=36;uniqueIndex:idx_authz_proj_id;check:id <> ''"`
+	ProjectID string `gorm:"not null;size:22;uniqueIndex:idx_authz_proj_id;check:project_id<>''" validate:"required"`
 	AccountID string `gorm:"size=36" validate:"required"`
 	OrderID   string `gorm:"size=36" validate:"required"`
 
@@ -96,7 +107,8 @@ func (a *Authz) BeforeCreate(tx *gorm.DB) error { return genID(&a.ID) }
 type Challenge struct {
 	gorm.Model
 
-	ID         string `gorm:"primaryKey;size=36;check:id <> ''"`
+	ID         string `gorm:"primaryKey;size=36;uniqueIndex:idx_challenge_proj_id;check:id <> ''"`
+	ProjectID  string `gorm:"not null;size:22;uniqueIndex:idx_challenge_proj_id;check:project_id<>''" validate:"required"`
 	AuthzID    string `gorm:"size=36" validate:"required"`
 	Type       string `gorm:"not null;size:100" validate:"required"`
 	Token      string `gorm:"not null;size:200"`
@@ -115,7 +127,8 @@ func (ch *Challenge) BeforeCreate(tx *gorm.DB) error {
 type Certificate struct {
 	gorm.Model
 
-	ID           string `gorm:"primaryKey;size=36;check:id <> ''"`
+	ID           string `gorm:"primaryKey;size=36;uniqueIndex:idx_cert_proj_id;check:id <> ''"`
+	ProjectID    string `gorm:"not null;size:22;uniqueIndex:idx_cert_proj_id;check:project_id<>''" validate:"required"`
 	OrderID      string `gorm:"size=36" validate:"required"`
 	Chain        []byte `gorm:"not null" validate:"required"` // certificate chain as PEM format
 	Hash         string `gorm:"not null"`                     // sha256sum of certificate

@@ -27,10 +27,16 @@ func newFixture(t *testing.T) *fixture {
 	}))
 	testutils.Must(Migrate(db))
 
+	proj := &Project{
+		Name: "test project",
+	}
+	require.NoError(t, db.Create(proj).Error)
+
 	acct := &Account{
-		Contacts: []string{"mailto:hello@example.com"},
-		Status:   acmeclient.AccountStatusValid.String(),
-		Key:      goxp.RandomString(10),
+		Contacts:  []string{"mailto:hello@example.com"},
+		Status:    acmeclient.AccountStatusValid.String(),
+		Key:       goxp.RandomString(10),
+		ProjectID: proj.ID,
 	}
 	require.NoError(t, db.Create(acct).Error)
 
@@ -40,6 +46,7 @@ func newFixture(t *testing.T) *fixture {
 		NotBefore:   helper.NowP(),
 		NotAfter:    helper.NowP(),
 		Identifiers: Identifier{Idents: []Ident{{Type: "dns", Value: "server1.charlie.127.0.0.1.sslip.io"}}},
+		ProjectID:   proj.ID,
 	}
 	require.NoError(t, db.Create(order).Error)
 
@@ -49,11 +56,13 @@ func newFixture(t *testing.T) *fixture {
 		Identifier: Identifier{Idents: []Ident{{Type: "dns", Value: "server1.charlie.127.0.0.1.sslip.io"}}},
 		Status:     acmeclient.AuthzStatusValid.String(),
 		Expires:    helper.NowP(),
+		ProjectID:  proj.ID,
 	}
 	require.NoError(t, db.Create(authz).Error)
 
 	return &fixture{
 		DB:    db,
+		proj:  proj,
 		acct:  acct,
 		order: order,
 		authz: authz,
@@ -63,9 +72,20 @@ func newFixture(t *testing.T) *fixture {
 type fixture struct {
 	*gorm.DB
 
+	proj  *Project
 	acct  *Account
 	order *Order
 	authz *Authz
+}
+
+func TestNonce(t *testing.T) {
+	fixture := newFixture(t)
+
+	nonce := &Nonce{ProjectID: fixture.proj.ID}
+	require.NoError(t, fixture.Create(nonce).Error)
+
+	var got Nonce
+	require.NoError(t, fixture.First(&got, "id = ?", nonce.ID).Error)
 }
 
 func TestProject(t *testing.T) {
@@ -77,7 +97,7 @@ func TestProject(t *testing.T) {
 	require.NoError(t, fixture.Create(proj).Error)
 
 	var got Project
-	require.NoError(t, fixture.First(&got).Error)
+	require.NoError(t, fixture.First(&got, "id = ?", proj.ID).Error)
 }
 
 func TestAccount(t *testing.T) {
@@ -97,9 +117,10 @@ func TestAccount(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			acct := &Account{
-				Contacts: tt.args.contacts,
-				Status:   acmeclient.AccountStatusValid.String(),
-				Key:      goxp.RandomString(10),
+				Contacts:  tt.args.contacts,
+				Status:    acmeclient.AccountStatusValid.String(),
+				Key:       goxp.RandomString(10),
+				ProjectID: fixture.proj.ID,
 			}
 			err := fixture.Create(acct).Error
 			require.Truef(t, (err != nil) == tt.wantErr, `Account() failed: error = %+v, wantErr = %v`, err, tt.wantErr)
@@ -138,6 +159,7 @@ func TestAuthz(t *testing.T) {
 				Identifier: tt.args.idents,
 				Status:     acmeclient.AuthzStatusValid.String(),
 				Expires:    helper.NowP(),
+				ProjectID:  fixture.proj.ID,
 			}
 			err := fixture.Create(authz).Error
 			require.Truef(t, (err != nil) == tt.wantErr, `Authz() failed: error = %+v, wantErr = %v`, err, tt.wantErr)
@@ -146,9 +168,10 @@ func TestAuthz(t *testing.T) {
 			}
 
 			chal := &Challenge{
-				AuthzID: authz.ID,
-				Type:    acmeclient.ChallengeTypeHttp01.String(),
-				Status:  acmeclient.ChallengeStatusPending.String(),
+				AuthzID:   authz.ID,
+				Type:      acmeclient.ChallengeTypeHttp01.String(),
+				Status:    acmeclient.ChallengeStatusPending.String(),
+				ProjectID: fixture.proj.ID,
 			}
 			require.NoError(t, fixture.Create(chal).Error)
 
@@ -158,4 +181,18 @@ func TestAuthz(t *testing.T) {
 			require.NotEmpty(t, got.Challenges)
 		})
 	}
+}
+
+func TestCertificate(t *testing.T) {
+	fixture := newFixture(t)
+
+	cert := &Certificate{
+		Chain:     goxp.RandomByte(20),
+		ProjectID: fixture.proj.ID,
+		OrderID:   fixture.order.ID,
+	}
+	require.NoError(t, fixture.Create(cert).Error)
+
+	var got Certificate
+	require.NoError(t, fixture.First(&got, "id = ?", cert.ID).Error)
 }

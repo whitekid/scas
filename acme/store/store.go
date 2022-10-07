@@ -13,18 +13,18 @@ type Interface interface {
 	CreateProject(ctx context.Context, proj *Project) (*Project, error)
 	GetProject(ctx context.Context, projID string) (*Project, error)
 
-	CreateNonce(ctx context.Context) (string, error) // create new nonce
-	ValidNonce(ctx context.Context, nonce string) bool
+	CreateNonce(ctx context.Context, projID string) (string, error) // create new nonce
+	ValidNonce(ctx context.Context, projID string, nonce string) bool
 	// CleanupExpiredNonce cleanup expired nonce
 	CleanupExpiredNonce(ctx context.Context) error
 
 	CreateAccount(ctx context.Context, account *Account) (*Account, error)
 	ListAccount(ctx context.Context, opts ListAccountOpts) ([]*Account, error)
-	GetAccount(ctx context.Context, acctID string) (*Account, error)
-	GetAccountByKey(ctx context.Context, key string) (*Account, error)
-	UpdateAccountContact(ctx context.Context, acctID string, contacts []string) (*Account, error)
-	UpdateAccountKey(ctx context.Context, acctID string, key string) (*Account, error)
-	UpdateAccountStatus(ctx context.Context, acctID string, status acmeclient.AccountStatus) (*Account, error)
+	GetAccount(ctx context.Context, projID string, acctID string) (*Account, error)
+	GetAccountByKey(ctx context.Context, projID string, key string) (*Account, error)
+	UpdateAccountContact(ctx context.Context, projID string, acctID string, contacts []string) (*Account, error)
+	UpdateAccountKey(ctx context.Context, projID string, acctID string, key string) (*Account, error)
+	UpdateAccountStatus(ctx context.Context, projID string, acctID string, status acmeclient.AccountStatus) (*Account, error)
 
 	CreateOrder(ctx context.Context, order *Order) (*Order, error)
 	GetOrder(ctx context.Context, orderID string) (*Order, error)
@@ -58,6 +58,7 @@ type Account struct {
 	acmeclient.AccountResource `validate:"required,dive"`
 
 	ID          string `validate:"eq="`
+	ProjectID   string `validate:"required"`
 	Key         string `validate:"required"` // account public key, base64 encoded
 	TermAgreeAt time.Time
 }
@@ -65,10 +66,12 @@ type Account struct {
 type Order struct {
 	*acmeclient.Order `validate:"required"`
 	AccountID         string `validate:"required"`
+	ProjectID         string `validate:"required"`
 }
 
 type Authz struct {
 	ID        string `validate:"eq="`
+	ProjectID string `validate:"required"`
 	AccountID string
 	OrderID   string
 
@@ -82,11 +85,13 @@ type Authz struct {
 type Challenge struct {
 	*acmeclient.Challenge `validate:"dive"`
 	ID                    string `validate:"eq="`
+	ProjectID             string `validate:"required"`
 	AuthzID               string `validate:"required"`
 }
 
 type Certificate struct {
 	ID           string `validate:"eq="`
+	ProjectID    string `validate:"required"`
 	OrderID      string `validate:"required"`
 	Chain        []byte `validate:"required"` // certificate chain PEM format
 	Hash         string

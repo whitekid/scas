@@ -10,14 +10,16 @@ import (
 	"scas/pkg/helper"
 )
 
-func (c *Client) Projects() *ProjectService {
+func (c *Client) Projects(projID string) *ProjectService {
 	return &ProjectService{
 		client: c,
+		projID: projID,
 	}
 }
 
 type ProjectService struct {
 	client *Client
+	projID string
 }
 
 type Project struct {
@@ -45,8 +47,8 @@ func (p *ProjectService) Create(ctx context.Context, req *Project) (*Project, er
 	return &proj, nil
 }
 
-func (p *ProjectService) Get(ctx context.Context, projID string) (*Project, error) {
-	resp, err := p.client.sendRequest(ctx, request.Get("%s/%s", p.client.endpoint, projID))
+func (p *ProjectService) Get(ctx context.Context) (*Project, error) {
+	resp, err := p.client.sendRequest(ctx, request.Get("%s/%s", p.client.endpoint, p.projID))
 	if err != nil {
 		return nil, errors.Wrapf(err, "fail to create project")
 	}
@@ -57,4 +59,19 @@ func (p *ProjectService) Get(ctx context.Context, projID string) (*Project, erro
 	}
 
 	return &proj, nil
+}
+
+func (p *ProjectService) Term() *TermService {
+	return &TermService{}
+}
+
+type TermService struct {
+}
+
+func (p *TermService) Update(ctx context.Context, term string) error {
+	panic("Not Implemented")
+}
+
+func (p *TermService) Get(ctx context.Context) (string, error) {
+	panic("Not Implemented")
 }

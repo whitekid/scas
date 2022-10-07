@@ -60,7 +60,7 @@ func TestScenario(t *testing.T) {
 	ts := newTestServer(ctx, t)
 
 	client := acmeclient.NewClient(ts.URL, nil)
-	proj := testutils.Must1(client.Projects().Create(ctx, &acmeclient.Project{Name: "test"}))
+	proj := testutils.Must1(client.Projects("").Create(ctx, &acmeclient.Project{Name: "test"}))
 	acme := testutils.Must1(client.ACME(proj.ACMEEndpoint, nil))
 
 	log.Debugf("request new account....")
@@ -155,7 +155,7 @@ func setupFixture(ctx context.Context, t *testing.T) *fixture {
 	server := newTestServer(ctx, t)
 
 	client := acmeclient.NewClient(server.URL, nil)
-	proj := testutils.Must1(client.Projects().Create(ctx, &acmeclient.Project{Name: "test"}))
+	proj := testutils.Must1(client.Projects("").Create(ctx, &acmeclient.Project{Name: "test"}))
 	acme := testutils.Must1(acmeclient.New(proj.ACMEEndpoint, priv))
 
 	acct := testutils.Must1(acme.NewAccount(ctx, &acmeclient.AccountRequest{Contact: []string{"mailto:hello@example.com"}}))
@@ -182,4 +182,42 @@ func setupFixture(ctx context.Context, t *testing.T) *fixture {
 		order:      order,
 		authzs:     authzs,
 	}
+}
+
+func newFixture(t *testing.T, ctx context.Context) *Fixture {
+	server := newTestServer(ctx, t)
+	client := acmeclient.NewClient(server.URL, nil)
+	proj := testutils.Must1(client.Projects("").Create(ctx, &acmeclient.Project{Name: "test project"}))
+
+	priv := generateKey(t)
+	acme := testutils.Must1(client.ACME(proj.ACMEEndpoint, priv))
+	acct := testutils.Must1(acme.NewAccount(ctx, &acmeclient.AccountRequest{Contact: []string{"mailto:hello@example.com"}}))
+
+	return &Fixture{
+		ACMEClient: acme,
+		client:     client,
+		server:     server,
+		proj:       proj,
+		acct:       acct,
+		key:        priv, // private key
+	}
+}
+
+type Fixture struct {
+	*acmeclient.ACMEClient
+	client *acmeclient.Client
+	server *TestServer
+	proj   *acmeclient.Project
+	acct   *acmeclient.Account
+	key    []byte
+}
+
+func generateKey(t *testing.T) []byte {
+	privateKey, err := x509x.GenerateKey(x509.ECDSAWithSHA256)
+	require.NoError(t, err)
+
+	keyDerBytes, err := x509x.EncodePrivateKeyToPEM(privateKey)
+	require.NoError(t, err)
+
+	return keyDerBytes
 }

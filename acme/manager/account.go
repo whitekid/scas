@@ -20,19 +20,19 @@ import (
 // JWK account public key
 // KID key URL
 // returns account, created
-func (m *Manager) NewAccount(ctx context.Context, JWK string, KID string, req *acmeclient.AccountRequest) (*store.Account, bool, error) {
-	log.Debugf("newAccount(): JWK=%s, KID=%s", JWK, KID)
+func (m *Manager) NewAccount(ctx context.Context, projID string, JWK string, KID string, req *acmeclient.AccountRequest) (*store.Account, bool, error) {
+	log.Debugf("newAccount(): Project=%s JWK=%s, KID=%s", projID, JWK, KID)
 
 	if JWK == "" {
 		acctID := idFromURI(KID)
-		acct, err := m.store.GetAccount(ctx, acctID)
+		acct, err := m.store.GetAccount(ctx, projID, acctID)
 		if err != nil && !errors.Is(err, store.ErrAccountDoesNotExist) {
 			return nil, false, err
 		}
 		return acct, false, nil
 	}
 
-	acct, err := m.store.GetAccountByKey(ctx, JWK)
+	acct, err := m.store.GetAccountByKey(ctx, projID, JWK)
 	if err != nil && !errors.Is(err, store.ErrAccountDoesNotExist) {
 		return nil, false, err
 	}
@@ -52,7 +52,8 @@ func (m *Manager) NewAccount(ctx context.Context, JWK string, KID string, req *a
 				Contact:             req.Contact,
 				TermOfServiceAgreed: req.TermOfServiceAgreed,
 			},
-			Key: JWK,
+			ProjectID: projID,
+			Key:       JWK,
 		}
 
 		if req.TermOfServiceAgreed {
@@ -84,8 +85,8 @@ func (m *Manager) checkAgreeTerm(account *store.Account) error {
 	return nil
 }
 
-func (m *Manager) UpdateAccount(ctx context.Context, acctID string, contact []string) (*store.Account, error) {
-	acct, err := m.store.GetAccount(ctx, acctID)
+func (m *Manager) UpdateAccount(ctx context.Context, projID string, acctID string, contact []string) (*store.Account, error) {
+	acct, err := m.store.GetAccount(ctx, projID, acctID)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +95,7 @@ func (m *Manager) UpdateAccount(ctx context.Context, acctID string, contact []st
 		return nil, err
 	}
 
-	if acct, err = m.store.UpdateAccountContact(ctx, acctID, contact); err != nil {
+	if acct, err = m.store.UpdateAccountContact(ctx, projID, acctID, contact); err != nil {
 		return nil, err
 	}
 
@@ -102,12 +103,12 @@ func (m *Manager) UpdateAccount(ctx context.Context, acctID string, contact []st
 }
 
 // VerifySignature verify request signature, if success returns it's account informations with requested KID
-func (m *Manager) VerifySignature(ctx context.Context, key string, kid string, signature string, header string, payload string) (*store.Account, error) {
+func (m *Manager) VerifySignature(ctx context.Context, projID string, key string, kid string, signature string, header string, payload string) (*store.Account, error) {
 	log.Debugf("verifySignature(): key=%s, kid=%s, signature=%s, header=%s, payload=%s", key, kid, signature, header, payload)
 
 	var acct *store.Account
 	if key == "" && kid != "" {
-		account, err := m.store.GetAccount(ctx, idFromURI(kid))
+		account, err := m.store.GetAccount(ctx, projID, idFromURI(kid))
 		if err != nil {
 			return nil, err
 		}
@@ -144,25 +145,25 @@ func (m *Manager) VerifySignature(ctx context.Context, key string, kid string, s
 	return acct, nil
 }
 
-func (m *Manager) UpdateAccountKey(ctx context.Context, oldKey, newKey string) (*store.Account, error) {
-	acct, err := m.store.GetAccountByKey(ctx, oldKey)
+func (m *Manager) UpdateAccountKey(ctx context.Context, projID string, oldKey, newKey string) (*store.Account, error) {
+	acct, err := m.store.GetAccountByKey(ctx, projID, oldKey)
 	if err != nil {
 		return nil, err
 	}
 
-	if _, err := m.store.GetAccountByKey(ctx, newKey); err == nil {
+	if _, err := m.store.GetAccountByKey(ctx, projID, newKey); err == nil {
 		return nil, errors.New("account already exists with the key")
 	}
 
-	if _, err := m.store.UpdateAccountKey(ctx, acct.ID, newKey); err != nil {
+	if _, err := m.store.UpdateAccountKey(ctx, projID, acct.ID, newKey); err != nil {
 		return nil, err
 	}
 
 	return nil, nil
 }
 
-func (m *Manager) DeactivateAccount(ctx context.Context, acctID string) (*store.Account, error) {
-	acct, err := m.store.GetAccount(ctx, acctID)
+func (m *Manager) DeactivateAccount(ctx context.Context, projID string, acctID string) (*store.Account, error) {
+	acct, err := m.store.GetAccount(ctx, projID, acctID)
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +172,7 @@ func (m *Manager) DeactivateAccount(ctx context.Context, acctID string) (*store.
 		return nil, err
 	}
 
-	if acct, err = m.store.UpdateAccountStatus(ctx, acctID, acmeclient.AccountStatusDeactivated); err != nil {
+	if acct, err = m.store.UpdateAccountStatus(ctx, projID, acctID, acmeclient.AccountStatusDeactivated); err != nil {
 		return nil, err
 	}
 

@@ -15,14 +15,13 @@ import (
 )
 
 func (s *ACMEServer) newOrder(c echo.Context) error {
-	cc := c.(*Context)
-
 	req := &acmeclient.OrderRequest{}
 	if err := s.parseJOSEPayload(c, req); err != nil {
 		return err
 	}
 
-	order, err := s.manager.NewOrder(c.Request().Context(), cc.header.KID, req.Identifiers, req.NotBefore, req.NotAfter)
+	cc := c.(*Context)
+	order, err := s.manager.NewOrder(c.Request().Context(), cc.project.ID, idFromURI(cc.header.KID), req.Identifiers, req.NotBefore, req.NotAfter)
 	if err != nil {
 		return errors.Wrapf(err, "fail to create order")
 	}

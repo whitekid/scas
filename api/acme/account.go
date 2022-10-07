@@ -31,7 +31,7 @@ func (s *ACMEServer) newAccount(c echo.Context) error {
 		return err
 	}
 
-	acct, created, err := s.manager.NewAccount(c.Request().Context(), cc.header.JWK, cc.header.KID, req)
+	acct, created, err := s.manager.NewAccount(c.Request().Context(), cc.projectID, cc.header.JWK, cc.header.KID, req)
 	if err != nil {
 		return errors.Wrapf(err, "fail to create account")
 	}
@@ -71,10 +71,6 @@ func (s *ACMEServer) updateAccount(c echo.Context) error {
 	log.Debugf("updateAccount()")
 
 	cc := c.(*Context)
-	acctID := c.Param("acct_id")
-
-	// TODO account deactive
-	// TODO reject deactivated account's request
 
 	var deactiveReq acmeclient.DeactiveRequest
 	if err := json.Unmarshal(cc.payload, &deactiveReq); err == nil && deactiveReq.Status != "" {
@@ -82,7 +78,7 @@ func (s *ACMEServer) updateAccount(c echo.Context) error {
 			return err
 		}
 
-		if _, err := s.manager.DeactivateAccount(c.Request().Context(), acctID); err != nil {
+		if _, err := s.manager.DeactivateAccount(c.Request().Context(), cc.project.ID, cc.account.ID); err != nil {
 			return err
 		}
 
@@ -99,7 +95,7 @@ func (s *ACMEServer) updateAccount(c echo.Context) error {
 			return err
 		}
 
-		acct, err := s.manager.UpdateAccount(c.Request().Context(), acctID, updateReq.Contact)
+		acct, err := s.manager.UpdateAccount(c.Request().Context(), cc.project.ID, cc.account.ID, updateReq.Contact)
 		if err != nil {
 			return err
 		}
@@ -151,11 +147,12 @@ func (s *ACMEServer) keyChange(c echo.Context) error {
 	}
 
 	// check inner signature
-	if _, err := s.manager.VerifySignature(c.Request().Context(), header.JWK, "", req.Signature, req.Protected, req.Payload); err != nil {
+	cc := c.(*Context)
+	if _, err := s.manager.VerifySignature(c.Request().Context(), cc.project.ID, header.JWK, "", req.Signature, req.Protected, req.Payload); err != nil {
 		return err
 	}
 
-	if _, err := s.manager.UpdateAccountKey(c.Request().Context(), keyChange.OldKey, header.JWK); err != nil {
+	if _, err := s.manager.UpdateAccountKey(c.Request().Context(), cc.project.ID, keyChange.OldKey, header.JWK); err != nil {
 		return err
 	}
 

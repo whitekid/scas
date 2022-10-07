@@ -27,13 +27,18 @@ func New(store store.Interface) *Manager {
 
 func (m *Manager) SetTermUpdated(t time.Time) { m.termUpdatedAt = t }
 
-func (m *Manager) ValidNonce(ctx context.Context, n string) bool { return m.store.ValidNonce(ctx, n) }
-func (m *Manager) NewNonce(ctx context.Context) (string, error)  { return m.store.CreateNonce(ctx) }
+func (m *Manager) ValidNonce(ctx context.Context, projID string, n string) bool {
+	return m.store.ValidNonce(ctx, projID, n)
+}
+
+func (m *Manager) NewNonce(ctx context.Context, projID string) (string, error) {
+	return m.store.CreateNonce(ctx, projID)
+}
 
 func (m *Manager) CheckNonceTimeout(ctx context.Context) error {
 	return m.store.CleanupExpiredNonce(ctx)
 }
 
-func (m *Manager) GetAccountByKey(ctx context.Context, JWK string) (*store.Account, error) {
-	return m.store.GetAccountByKey(ctx, JWK)
+func (m *Manager) GetAccountByKey(ctx context.Context, projID string, JWK string) (*store.Account, error) {
+	return m.store.GetAccountByKey(ctx, projID, JWK)
 }

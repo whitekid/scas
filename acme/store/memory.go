@@ -54,7 +54,7 @@ func (store *memoryStoreImpl) GetProject(ctx context.Context, projID string) (*P
 	panic("Not Implemented")
 }
 
-func (store *memoryStoreImpl) CreateNonce(ctx context.Context) (string, error) {
+func (store *memoryStoreImpl) CreateNonce(ctx context.Context, projID string) (string, error) {
 	nonce := shortuuid.New()
 
 	store.noncesMU.Lock()
@@ -65,7 +65,7 @@ func (store *memoryStoreImpl) CreateNonce(ctx context.Context) (string, error) {
 	return nonce, nil
 }
 
-func (store *memoryStoreImpl) ValidNonce(ctx context.Context, n string) bool {
+func (store *memoryStoreImpl) ValidNonce(ctx context.Context, projID string, n string) bool {
 	expire, ok := store.nonces[n]
 	if !ok {
 		return false
@@ -96,7 +96,7 @@ func (store *memoryStoreImpl) ListAccount(ctx context.Context, opts ListAccountO
 	panic("Not Implemented")
 }
 
-func (store *memoryStoreImpl) GetAccount(ctx context.Context, acctID string) (*Account, error) {
+func (store *memoryStoreImpl) GetAccount(ctx context.Context, projID string, acctID string) (*Account, error) {
 	acct, ok := store.accounts[acctID]
 	if !ok {
 		return nil, ErrAccountDoesNotExist
@@ -119,7 +119,7 @@ func (store *memoryStoreImpl) CreateAccount(ctx context.Context, acct *Account) 
 	return acct, nil
 }
 
-func (store *memoryStoreImpl) GetAccountByKey(ctx context.Context, key string) (*Account, error) {
+func (store *memoryStoreImpl) GetAccountByKey(ctx context.Context, projID string, key string) (*Account, error) {
 	accts := fx.FilterMap(store.accounts, func(id string, acc *Account) bool { return key == acc.Key })
 	if len(accts) != 1 {
 		return nil, ErrAccountDoesNotExist
@@ -132,15 +132,15 @@ func (store *memoryStoreImpl) GetAccountByKey(ctx context.Context, key string) (
 	return nil, ErrAccountDoesNotExist
 }
 
-func (store *memoryStoreImpl) UpdateAccountContact(ctx context.Context, acctID string, contacts []string) (*Account, error) {
+func (store *memoryStoreImpl) UpdateAccountContact(ctx context.Context, projID string, acctID string, contacts []string) (*Account, error) {
 	panic("Not Implemented")
 }
 
-func (store *memoryStoreImpl) UpdateAccountKey(ctx context.Context, acctID string, key string) (*Account, error) {
+func (store *memoryStoreImpl) UpdateAccountKey(ctx context.Context, projID string, acctID string, key string) (*Account, error) {
 	panic("Not Implemented")
 }
 
-func (store *memoryStoreImpl) UpdateAccountStatus(ctx context.Context, acctID string, status acmeclient.AccountStatus) (*Account, error) {
+func (store *memoryStoreImpl) UpdateAccountStatus(ctx context.Context, projID string, acctID string, status acmeclient.AccountStatus) (*Account, error) {
 	panic("Not Implemented")
 }
 

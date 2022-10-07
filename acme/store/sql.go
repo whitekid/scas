@@ -128,9 +128,10 @@ func modelsToProject(proj *models.Project) *Project {
 	}
 }
 
-func (s *sqlStoreImpl) CreateNonce(ctx context.Context) (string, error) {
+func (s *sqlStoreImpl) CreateNonce(ctx context.Context, projID string) (string, error) {
 	nonce := &models.Nonce{
-		Expire: time.Now().UTC().Add(nonceTimeout),
+		ProjectID: projID,
+		Expire:    time.Now().UTC().Add(nonceTimeout),
 	}
 
 	if tx := s.db.WithContext(ctx).Create(nonce); tx.Error != nil {
@@ -140,9 +141,9 @@ func (s *sqlStoreImpl) CreateNonce(ctx context.Context) (string, error) {
 	return nonce.ID, nil
 }
 
-func (s *sqlStoreImpl) ValidNonce(ctx context.Context, nonce string) bool {
+func (s *sqlStoreImpl) ValidNonce(ctx context.Context, projID string, nonce string) bool {
 	var n models.Nonce
-	if tx := s.db.WithContext(ctx).First(&n, "id = ?", nonce); tx.Error != nil {
+	if tx := s.db.WithContext(ctx).First(&n, "id = ? AND project_id = ?", nonce, projID); tx.Error != nil {
 		return false
 	}
 
@@ -164,6 +165,7 @@ func (s *sqlStoreImpl) CreateAccount(ctx context.Context, acct *Account) (*Accou
 		Status:              acct.Status.String(),
 		Contacts:            acct.Contact,
 		TermOfServiceAgreed: acct.TermOfServiceAgreed,
+		ProjectID:           acct.ProjectID,
 	}
 
 	if tx := s.db.WithContext(ctx).Create(acctRef); tx.Error != nil {
@@ -181,14 +183,16 @@ func modelsToAccount(acct *models.Account) *Account {
 			TermOfServiceAgreed: acct.TermOfServiceAgreed,
 		},
 		ID:          acct.ID,
+		ProjectID:   acct.ProjectID,
 		Key:         acct.Key,
 		TermAgreeAt: fx.TernaryCF(acct.TermAgreeAt == nil, func() time.Time { return time.Time{} }, func() time.Time { return *acct.TermAgreeAt }),
 	}
 }
 
 type ListAccountOpts struct {
-	ID  string
-	Key string
+	ProjectID string
+	ID        string
+	Key       string
 }
 
 func (s *sqlStoreImpl) ListAccount(ctx context.Context, opts ListAccountOpts) ([]*Account, error) {
@@ -202,8 +206,9 @@ func (s *sqlStoreImpl) ListAccount(ctx context.Context, opts ListAccountOpts) ([
 
 func (s *sqlStoreImpl) listAccount(ctx context.Context, opts ListAccountOpts) ([]*models.Account, error) {
 	w := &models.Account{
-		ID:  opts.ID,
-		Key: opts.Key,
+		ProjectID: opts.ProjectID,
+		ID:        opts.ID,
+		Key:       opts.Key,
 	}
 
 	var accts []*models.Account
@@ -214,8 +219,8 @@ func (s *sqlStoreImpl) listAccount(ctx context.Context, opts ListAccountOpts) ([
 	return accts, nil
 }
 
-func (s *sqlStoreImpl) GetAccount(ctx context.Context, acctID string) (*Account, error) {
-	acct, err := s.getAccount(ctx, acctID)
+func (s *sqlStoreImpl) GetAccount(ctx context.Context, projID string, acctID string) (*Account, error) {
+	acct, err := s.getAccount(ctx, projID, acctID)
 	if err != nil {
 		return nil, err
 	}
@@ -223,9 +228,10 @@ func (s *sqlStoreImpl) GetAccount(ctx context.Context, acctID string) (*Account,
 	return modelsToAccount(acct), nil
 }
 
-func (s *sqlStoreImpl) getAccount(ctx context.Context, acctID string) (*models.Account, error) {
+func (s *sqlStoreImpl) getAccount(ctx context.Context, projID string, acctID string) (*models.Account, error) {
 	accts, err := s.listAccount(ctx, ListAccountOpts{
-		ID: acctID,
+		ProjectID: projID,
+		ID:        acctID,
 	})
 	if err != nil {
 		return nil, err
@@ -241,9 +247,10 @@ func (s *sqlStoreImpl) getAccount(ctx context.Context, acctID string) (*models.A
 	}
 }
 
-func (s *sqlStoreImpl) GetAccountByKey(ctx context.Context, key string) (*Account, error) {
+func (s *sqlStoreImpl) GetAccountByKey(ctx context.Context, projID string, key string) (*Account, error) {
 	accts, err := s.ListAccount(ctx, ListAccountOpts{
-		Key: key,
+		ProjectID: projID,
+		Key:       key,
 	})
 	if err != nil {
 		return nil, err
@@ -259,8 +266,8 @@ func (s *sqlStoreImpl) GetAccountByKey(ctx context.Context, key string) (*Accoun
 	}
 }
 
-func (s *sqlStoreImpl) updateAccount(ctx context.Context, acctID string, fn func(acct *models.Account) error) (*Account, error) {
-	acct, err := s.getAccount(ctx, acctID)
+func (s *sqlStoreImpl) updateAccount(ctx context.Context, projID, acctID string, fn func(acct *models.Account) error) (*Account, error) {
+	acct, err := s.getAccount(ctx, projID, acctID)
 	if err != nil {
 		return nil, err
 	}
@@ -276,33 +283,31 @@ func (s *sqlStoreImpl) updateAccount(ctx context.Context, acctID string, fn func
 	return modelsToAccount(acct), nil
 }
 
-func (s *sqlStoreImpl) UpdateAccountContact(ctx context.Context, acctID string, contacts []string) (*Account, error) {
-	return s.updateAccount(ctx, acctID, func(acct *models.Account) error {
+func (s *sqlStoreImpl) UpdateAccountContact(ctx context.Context, projID string, acctID string, contacts []string) (*Account, error) {
+	return s.updateAccount(ctx, projID, acctID, func(acct *models.Account) error {
 		acct.Contacts = contacts
 		return nil
 	})
 }
 
-func (s *sqlStoreImpl) UpdateAccountKey(ctx context.Context, acctID string, key string) (*Account, error) {
-	return s.updateAccount(ctx, acctID, func(acct *models.Account) error {
+func (s *sqlStoreImpl) UpdateAccountKey(ctx context.Context, projID string, acctID string, key string) (*Account, error) {
+	return s.updateAccount(ctx, projID, acctID, func(acct *models.Account) error {
 		acct.Key = key
 		return nil
 	})
 }
 
-func (s *sqlStoreImpl) UpdateAccountStatus(ctx context.Context, acctID string, status acmeclient.AccountStatus) (*Account, error) {
-	return s.updateAccount(ctx, acctID, func(acct *models.Account) error {
+func (s *sqlStoreImpl) UpdateAccountStatus(ctx context.Context, projID string, acctID string, status acmeclient.AccountStatus) (*Account, error) {
+	return s.updateAccount(ctx, projID, acctID, func(acct *models.Account) error {
 		acct.Status = status.String()
 		return nil
 	})
 }
 
 func identifierToModel(idents common.Identifier) models.Identifier {
-	return models.NewIdentifier([]models.Ident{
-		{
-			Type:  idents.Type.String(),
-			Value: idents.Value,
-		},
+	return models.NewIdentifier([]models.Ident{{
+		Type:  idents.Type.String(),
+		Value: idents.Value},
 	})
 }
 
@@ -322,6 +327,7 @@ func (s *sqlStoreImpl) CreateOrder(ctx context.Context, order *Order) (*Order, e
 	}
 
 	orderRef := &models.Order{
+		ProjectID:   order.ProjectID,
 		AccountID:   order.AccountID,
 		Status:      order.Status.String(),
 		Identifiers: identifiersToModel(order.Identifiers),
@@ -393,6 +399,7 @@ func modelsToOrder(order *models.Order) *Order {
 			ID: order.ID,
 		},
 		AccountID: order.AccountID,
+		ProjectID: order.ProjectID,
 	}
 
 	if order.Error != "" {
@@ -481,6 +488,7 @@ func (s *sqlStoreImpl) CreateAuthz(ctx context.Context, authz *Authz) (*Authz, e
 func authzToModel(authz *Authz) *models.Authz {
 	return &models.Authz{
 		ID:         authz.ID,
+		ProjectID:  authz.ProjectID,
 		AccountID:  authz.AccountID,
 		OrderID:    authz.OrderID,
 		Status:     authz.Status.String(),
@@ -494,6 +502,7 @@ func modelToAuthz(authz *models.Authz) *Authz {
 	idents := modelsToIdentifier(authz.Identifier)
 	return &Authz{
 		ID:         authz.ID,
+		ProjectID:  authz.ProjectID,
 		AccountID:  authz.AccountID,
 		OrderID:    authz.OrderID,
 		Status:     acmeclient.AuthzStatus(authz.Status),
@@ -557,8 +566,9 @@ func modelsToChallenge(ch *models.Challenge) *Challenge {
 			Validated:  common.NewTimestampP(ch.Validated),
 			RetryAfter: timeToTimestamp(ch.RetryAfter),
 		},
-		ID:      ch.ID,
-		AuthzID: ch.AuthzID,
+		ID:        ch.ID,
+		ProjectID: ch.ProjectID,
+		AuthzID:   ch.AuthzID,
 	}
 
 	var problem common.ProblemDetail
@@ -687,6 +697,7 @@ func (s *sqlStoreImpl) CreateChallenge(ctx context.Context, chal *Challenge) (*C
 	}
 
 	chalRef := &models.Challenge{
+		ProjectID: chal.ProjectID,
 		AuthzID:   chal.AuthzID,
 		Type:      chal.Type.String(),
 		Token:     chal.Token,
@@ -778,6 +789,7 @@ func (s *sqlStoreImpl) listCertificate(ctx context.Context, opts ListCertificate
 func modelsToCertificate(cert *models.Certificate) *Certificate {
 	return &Certificate{
 		ID:           cert.ID,
+		ProjectID:    cert.ProjectID,
 		Chain:        cert.Chain,
 		OrderID:      cert.OrderID,
 		Hash:         cert.Hash,
@@ -821,8 +833,9 @@ func (s *sqlStoreImpl) CreateCertificate(ctx context.Context, cert *Certificate)
 	}
 
 	ref := &models.Certificate{
-		Chain:   cert.Chain,
-		OrderID: cert.OrderID,
+		ProjectID: cert.ProjectID,
+		Chain:     cert.Chain,
+		OrderID:   cert.OrderID,
 	}
 	if tx := s.db.WithContext(ctx).Omit(clause.Associations).Save(ref); tx.Error != nil {
 		return nil, gormx.ConvertSQLError(tx.Error)

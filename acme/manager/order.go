@@ -23,10 +23,10 @@ const (
 	authTimeout  = time.Minute * 30
 )
 
-func (m *Manager) NewOrder(ctx context.Context, kid string, identifiers []common.Identifier, notBefore *common.Timestamp, notAfter *common.Timestamp) (*store.Order, error) {
-	log.Debugf("NewOrder(): kid=%s", kid)
+func (m *Manager) NewOrder(ctx context.Context, projID string, acctID string, identifiers []common.Identifier, notBefore *common.Timestamp, notAfter *common.Timestamp) (*store.Order, error) {
+	log.Debugf("NewOrder(): project=%s, acctID=%s", projID, acctID)
 
-	acct, err := m.store.GetAccount(ctx, idFromURI(kid))
+	acct, err := m.store.GetAccount(ctx, projID, acctID)
 	if err != nil {
 		return nil, err
 	}
@@ -41,6 +41,7 @@ func (m *Manager) NewOrder(ctx context.Context, kid string, identifiers []common
 				NotAfter:    notAfter,
 			},
 		},
+		ProjectID: projID,
 		AccountID: acct.ID,
 	})
 	if err != nil {
@@ -49,6 +50,7 @@ func (m *Manager) NewOrder(ctx context.Context, kid string, identifiers []common
 
 	for _, identifier := range identifiers {
 		authz, err := m.store.CreateAuthz(ctx, &store.Authz{
+			ProjectID:  projID,
 			AccountID:  acct.ID,
 			OrderID:    order.ID,
 			Status:     acmeclient.AuthzStatusPending,
@@ -67,7 +69,8 @@ func (m *Manager) NewOrder(ctx context.Context, kid string, identifiers []common
 				Status: acmeclient.ChallengeStatusPending,
 				Token:  base64.RawURLEncoding.EncodeToString(goxp.RandomByte(40)),
 			},
-			AuthzID: authz.ID,
+			ProjectID: projID,
+			AuthzID:   authz.ID,
 		})
 		if err != nil {
 			return nil, errors.Wrapf(err, "fail to create order")
@@ -78,7 +81,7 @@ func (m *Manager) NewOrder(ctx context.Context, kid string, identifiers []common
 }
 
 func (m *Manager) FinalizeOrder(ctx context.Context, orderID string, csr *x509.CertificateRequest) (*store.Order, error) {
-	log.Debugf("finalizeOrder() orderID=%s", orderID)
+	log.Debugf("FinalizeOrder() orderID=%s", orderID)
 
 	order, err := m.store.GetOrder(ctx, orderID)
 	if err != nil {
@@ -137,8 +140,9 @@ func (m *Manager) FinalizeOrder(ctx context.Context, orderID string, csr *x509.C
 
 	// TODO with chain
 	_, err = m.store.CreateCertificate(ctx, &store.Certificate{
-		OrderID: order.ID,
-		Chain:   x509x.EncodeCertificateToPEM(cert),
+		ProjectID: order.ProjectID,
+		OrderID:   order.ID,
+		Chain:     x509x.EncodeCertificateToPEM(cert),
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "certificate create failed")
