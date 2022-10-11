@@ -49,17 +49,45 @@ func TestProject(t *testing.T) {
 }
 
 func TestProjectTerms(t *testing.T) {
-	t.Skip()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	fixture := newFixture(t, ctx)
+	termSvc := fixture.client.Projects(fixture.proj.ID).Term()
 
-	proj := fixture.proj
-	err := fixture.client.Projects(proj.ID).Term().Update(ctx, "updated term of service")
+	// create first term of service
+	term := &acmeclient.Term{Content: "term of service"}
+	created, err := termSvc.Update(ctx, term)
+	require.NoError(t, err)
+	require.NotEmpty(t, created.ID)
+	require.Equal(t, "term of service", created.Content)
+	require.False(t, created.Active)
+
+	{
+		got, err := termSvc.Get(ctx, created.ID)
+		require.NoError(t, err)
+		require.NotEmpty(t, got.ID)
+		require.False(t, got.Active)
+
+		proj, err := fixture.client.Projects(fixture.proj.ID).Get(ctx)
+		require.NoError(t, err)
+		require.Empty(t, proj.TermID)
+	}
+
+	// activate
+	term.Content = "updated term of service"
+	term.Active = true
+	activated, err := termSvc.Update(ctx, term)
 	require.NoError(t, err)
 
-	term, err := fixture.client.Projects(proj.ID).Term().Get(ctx)
-	require.NoError(t, err)
-	require.NotEmpty(t, term)
+	{
+		got, err := termSvc.Get(ctx, activated.ID)
+		require.NoError(t, err)
+		require.NotEmpty(t, got.ID)
+		require.True(t, got.Active)
+
+		proj, err := fixture.client.Projects(fixture.proj.ID).Get(ctx)
+		require.NoError(t, err)
+		require.NotEmpty(t, proj.TermID)
+	}
 }

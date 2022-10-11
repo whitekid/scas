@@ -325,6 +325,7 @@ func (svc *CertificateService) Renewal(ctx context.Context, ID string) (*Certifi
 	defer resp.Body.Close()
 
 	var cert Certificate
+	defer resp.Body.Close()
 	if err := resp.JSON(&cert); err != nil {
 		return nil, err
 	}

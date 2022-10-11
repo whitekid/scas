@@ -45,6 +45,8 @@ func NewSQLStore(dburl string) Interface {
 type Project struct {
 	ID                      string
 	Name                    string
+	TermID                  string
+	Website                 string
 	CreatedAt               time.Time
 	CAAIdentities           []string
 	ExternalAccountRequired bool
@@ -122,10 +124,101 @@ func modelsToProject(proj *models.Project) *Project {
 	return &Project{
 		ID:                      proj.ID,
 		Name:                    proj.Name,
+		TermID:                  fx.TernaryCF(proj.TermID == nil, func() string { return "" }, func() string { return *proj.TermID }),
+		Website:                 proj.Website,
 		CreatedAt:               proj.CreatedAt,
 		CAAIdentities:           proj.CAAIdentities,
 		ExternalAccountRequired: proj.ExternalAccountRequired,
 	}
+}
+
+type Term struct {
+	ID        string
+	ProjectID string `validate:"required"`
+	Content   string `validate:"required"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+func (s *sqlStoreImpl) CreateTerm(ctx context.Context, projID string, in *Term) (*Term, error) {
+	term := &models.Term{
+		ProjectID: in.ProjectID,
+		Content:   in.Content,
+	}
+	if tx := s.db.WithContext(ctx).Create(term); tx.Error != nil {
+		return nil, tx.Error
+	}
+	return modelsToTerm(term), nil
+}
+
+func modelsToTerm(in *models.Term) *Term {
+	return &Term{
+		ID:        in.ID,
+		ProjectID: in.ProjectID,
+		Content:   in.Content,
+		CreatedAt: in.CreatedAt,
+		UpdatedAt: in.UpdatedAt,
+	}
+}
+
+func (s *sqlStoreImpl) UpdateTerm(ctx context.Context, projID string, term *Term) (*Term, error) {
+	panic("Not Implemented: UpdateTerm()")
+}
+
+func (s *sqlStoreImpl) ActivateTerm(ctx context.Context, projID string, termID string) error {
+	// FIXME Name이 validate:required여서 dummy로 넣어주고있다.
+	if tx := s.db.Model(&models.Project{Name: "dummy"}).Where("id = ?", projID).Update("term_id", termID); tx.Error != nil {
+		return gormx.ConvertSQLError(tx.Error)
+	}
+
+	return nil
+}
+
+func (s *sqlStoreImpl) GetTerm(ctx context.Context, projID string, termID string) (*Term, error) {
+	term, err := s.getTerm(ctx, projID, termID)
+	if err != nil {
+		return nil, err
+	}
+
+	return modelsToTerm(term), nil
+}
+
+type ListTermOpts struct {
+	ProjectID string
+	ID        string
+}
+
+func (s *sqlStoreImpl) getTerm(ctx context.Context, projID string, termID string) (*models.Term, error) {
+	terms, err := s.listTerm(ctx, ListTermOpts{
+		ProjectID: projID,
+		ID:        termID,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	switch len(terms) {
+	case 0:
+		return nil, ErrAccountDoesNotExist
+	case 1:
+		return terms[0], nil
+	default:
+		return nil, ErrMultipleRecords
+	}
+}
+
+func (s *sqlStoreImpl) listTerm(ctx context.Context, opts ListTermOpts) ([]*models.Term, error) {
+	w := &models.Term{
+		ProjectID: opts.ProjectID,
+		ID:        opts.ID,
+	}
+
+	var terms []*models.Term
+	if tx := s.db.WithContext(ctx).Order("created_at").Find(&terms, w); tx.Error != nil {
+		return nil, gormx.ConvertSQLError(tx.Error)
+	}
+
+	return terms, nil
 }
 
 func (s *sqlStoreImpl) CreateNonce(ctx context.Context, projID string) (string, error) {

@@ -249,8 +249,8 @@ func (c *ACMEClient) getDirectory(ctx context.Context) error {
 	if err != nil {
 		return errors.Wrapf(err, "fail to get directory")
 	}
+	
 	defer resp.Body.Close()
-
 	if err := resp.JSON(&c.directory); err != nil {
 		return errors.Wrap(err, "fail to get directory")
 	}

@@ -33,6 +33,7 @@ func (svc *ChallengeService) Get(ctx context.Context) (*Challenge, error) {
 	}
 
 	var chal Challenge
+	defer resp.Body.Close()
 	if err := resp.JSON(&chal); err != nil {
 		return nil, err
 	}

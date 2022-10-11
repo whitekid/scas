@@ -54,6 +54,22 @@ func (store *memoryStoreImpl) GetProject(ctx context.Context, projID string) (*P
 	panic("Not Implemented")
 }
 
+func (store *memoryStoreImpl) CreateTerm(ctx context.Context, projID string, term *Term) (*Term, error) {
+	panic("Not Implemented: CreateTerm()")
+}
+
+func (store *memoryStoreImpl) UpdateTerm(ctx context.Context, projID string, term *Term) (*Term, error) {
+	panic("Not Implemented: UpdateTerm()")
+}
+
+func (store *memoryStoreImpl) GetTerm(ctx context.Context, projID string, termID string) (*Term, error) {
+	panic("Not Implemented: GetTerm()")
+}
+
+func (store *memoryStoreImpl) ActivateTerm(ctx context.Context, projID string, termID string) error {
+	panic("Not Implemented: ActivateTerm()")
+}
+
 func (store *memoryStoreImpl) CreateNonce(ctx context.Context, projID string) (string, error) {
 	nonce := shortuuid.New()
 

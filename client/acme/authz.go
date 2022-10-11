@@ -94,6 +94,7 @@ func (svc *AuthzService) Get(ctx context.Context) (*Authz, error) {
 	}
 
 	authz := Authz{}
+	defer resp.Body.Close()
 	if err := resp.JSON(&authz.AuthzResource); err != nil {
 		return nil, errors.Wrap(err, "fail to decode ressponse")
 	}
