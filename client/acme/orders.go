@@ -88,6 +88,7 @@ func (client *ACMEClient) NewOrder(ctx context.Context, req *OrderRequest) (*Ord
 	}
 
 	order := &Order{}
+	defer resp.Body.Close()
 	if err := resp.JSON(&order.OrderResource); err != nil {
 		return nil, errors.Wrap(err, "fail to parse response")
 	}
@@ -135,6 +136,7 @@ func (svc *OrderService) Finalize(ctx context.Context, template *x509.Certificat
 	}
 
 	order := &Order{}
+	defer resp.Body.Close()
 	if err := resp.JSON(&order.OrderResource); err != nil {
 		return nil, errors.Wrap(err, "fail to parse response")
 	}

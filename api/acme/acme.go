@@ -73,8 +73,10 @@ func (s *Server) Route(e *echo.Group) {
 
 	e.POST("/", s.createProject)
 	e.GET("/:project_id", s.getProject, s.acme.checkValidProject)
-	e.POST("/:project_id/term", s.updateTerm, s.acme.checkValidProject)
-	e.GET("/:project_id/term", s.getTerm, s.acme.checkValidProject)
+	e.POST("/:project_id/terms", s.createTerm, s.acme.checkValidProject)
+	e.POST("/:project_id/terms/:term_id", s.updateTerm, s.acme.checkValidProject)
+	e.GET("/:project_id/terms/:term_id", s.getTerm, s.acme.checkValidProject)
+	e.GET("/:project_id/terms", s.getTerm, s.acme.checkValidProject)
 
 	acme := e.Group("/acme/:project_id", extractProjectID, s.acme.checkValidProject)
 	acme.GET("/directory", s.acme.getDirectory)

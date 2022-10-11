@@ -39,7 +39,7 @@ func (s *ACMEServer) keyChangeURL(c echo.Context) string {
 }
 
 func (s *ACMEServer) termsURL(c echo.Context) string {
-	return fmt.Sprintf("%s/%s/terms/", s.addr, c.(*Context).project.ID)
+	return fmt.Sprintf("%s/%s/terms", s.addr, c.(*Context).project.ID)
 }
 
 func (s *ACMEServer) websiteURL(c echo.Context) string {

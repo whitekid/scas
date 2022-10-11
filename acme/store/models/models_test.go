@@ -100,6 +100,17 @@ func TestProject(t *testing.T) {
 	require.NoError(t, fixture.First(&got, "id = ?", proj.ID).Error)
 }
 
+func TestTerm(t *testing.T) {
+	fixture := newFixture(t)
+
+	term := &Term{ProjectID: fixture.proj.ID, Content: "term of service"}
+	require.NoError(t, fixture.Create(term).Error)
+
+	tx := fixture.Model(&Project{Name: "dummy"}).Where("id = ?", fixture.proj.ID).Update("term_id", term.ID)
+	require.NoError(t, tx.Error)
+	require.Equal(t, int64(1), tx.RowsAffected)
+}
+
 func TestAccount(t *testing.T) {
 	fixture := newFixture(t)
 

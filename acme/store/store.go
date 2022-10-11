@@ -13,6 +13,11 @@ type Interface interface {
 	CreateProject(ctx context.Context, proj *Project) (*Project, error)
 	GetProject(ctx context.Context, projID string) (*Project, error)
 
+	CreateTerm(ctx context.Context, projID string, term *Term) (*Term, error)
+	GetTerm(ctx context.Context, projID string, termID string) (*Term, error)
+	UpdateTerm(ctx context.Context, projID string, term *Term) (*Term, error)
+	ActivateTerm(ctx context.Context, projID string, termID string) error
+
 	CreateNonce(ctx context.Context, projID string) (string, error) // create new nonce
 	ValidNonce(ctx context.Context, projID string, nonce string) bool
 	// CleanupExpiredNonce cleanup expired nonce

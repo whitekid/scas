@@ -41,6 +41,7 @@ func (s *Server) getProject(c echo.Context) error {
 	return c.JSON(http.StatusOK, &acmeclient.Project{
 		ID:           proj.ID,
 		Name:         proj.Name,
+		TermID:       proj.TermID,
 		ACMEEndpoint: s.acmeURL(proj.ID),
 		CreatedAt:    proj.CreatedAt,
 	})

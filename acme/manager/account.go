@@ -43,9 +43,6 @@ func (m *Manager) NewAccount(ctx context.Context, projID string, JWK string, KID
 			return nil, false, store.ErrAccountDoesNotExist
 		}
 
-		// TODO agree term; directory에 term 정보가 있어야함.
-		// 사용자가 aggree한 이후에 변경된 term에 대해서 ...
-
 		acct = &store.Account{
 			AccountResource: acmeclient.AccountResource{
 				Status:              acmeclient.AccountStatusValid,

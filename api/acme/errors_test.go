@@ -94,6 +94,7 @@ func TestError(t *testing.T) {
 			}
 
 			got := &common.ProblemDetail{}
+			defer resp.Body.Close()
 			require.NoError(t, resp.JSON(got))
 
 			require.Equal(t, common.MIMEProblemDetail, resp.Header.Get(echo.HeaderContentType))

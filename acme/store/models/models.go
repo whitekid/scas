@@ -10,7 +10,7 @@ import (
 )
 
 func Migrate(db *gorm.DB) error {
-	if err := db.AutoMigrate(&Project{}, &Nonce{}, &Account{}, &Order{}, &Authz{}, &Challenge{}, &Certificate{}); err != nil {
+	if err := db.AutoMigrate(&Project{}, &Term{}, &Nonce{}, &Account{}, &Order{}, &Authz{}, &Challenge{}, &Certificate{}); err != nil {
 		return err
 	}
 
@@ -23,12 +23,16 @@ type Project struct {
 	ID   string `gorm:"primaryKey;size:22;check:id <> ''"`
 	Name string `gorm:"not null" validate:"required"`
 
-	TermOfService           string     // TODO
-	TermUpdatedAt           *time.Time // TODO
-	Website                 string     // TODO
-	CAAIdentities           Strings    `gorm:"size:255"`
+	TermOfService string     // TODO
+	TermUpdatedAt *time.Time // TODO
+	TermID        *string    // Current Term ID
+	Term          *Term
+
+	Website                 string  `gorm:"size:255"`
+	CAAIdentities           Strings `gorm:"size:255"` // rfc6844 Certification Authority Authorization(CAA)
 	ExternalAccountRequired bool
 
+	Terms        []Term        `gorm:"foreignKey:ProjectID"`
 	Nonces       []Nonce       `gorm:"foreignKey:ProjectID"`
 	Accounts     []Account     `gorm:"foreignKey:ProjectID"`
 	Orders       []Order       `gorm:"foreignKey:ProjectID"`
@@ -39,6 +43,21 @@ type Project struct {
 
 func (p *Project) BeforeCreate(tx *gorm.DB) error {
 	genID(&p.ID)
+
+	return nil
+}
+
+// Term term of service
+type Term struct {
+	gorm.Model
+
+	ID        string `gorm:"primaryKey;size:22;uniqueIndex:idx_term_proj_id;check:project_id<>'';check:id<>''"`
+	ProjectID string `gorm:"not null;size:22;uniqueIndex:idx_term_proj_id;check:project_id<>''" validate:"required"`
+	Content   string `gorm:"type:text;check:content<>''" validate:"required"`
+}
+
+func (t *Term) BeforeCreate(tx *gorm.DB) error {
+	genID(&t.ID)
 
 	return nil
 }

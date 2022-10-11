@@ -2,11 +2,13 @@ package acme
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/pkg/errors"
 	"github.com/whitekid/goxp/request"
 
+	"scas/client/common"
 	"scas/pkg/helper"
 )
 
@@ -25,7 +27,9 @@ type ProjectService struct {
 type Project struct {
 	ID           string    `json:"id"`
 	Name         string    `json:"name" validate:"required"` // project name
-	ACMEEndpoint string    `json:"acme_endpoint"`            // ACME endpoint url
+	TermID       string    `json:"term,omitempty"`
+	Website      string    `json:"website"`
+	ACMEEndpoint string    `json:"acme_endpoint"` // ACME endpoint url
 	CreatedAt    time.Time `json:"created_at"`
 }
 
@@ -40,6 +44,7 @@ func (p *ProjectService) Create(ctx context.Context, req *Project) (*Project, er
 	}
 
 	var proj Project
+	defer resp.Body.Close()
 	if err := resp.JSON(&proj); err != nil {
 		return nil, errors.Wrapf(err, "parse response")
 	}
@@ -54,6 +59,7 @@ func (p *ProjectService) Get(ctx context.Context) (*Project, error) {
 	}
 
 	var proj Project
+	defer resp.Body.Close()
 	if err := resp.JSON(&proj); err != nil {
 		return nil, errors.Wrapf(err, "parse response")
 	}
@@ -62,16 +68,52 @@ func (p *ProjectService) Get(ctx context.Context) (*Project, error) {
 }
 
 func (p *ProjectService) Term() *TermService {
-	return &TermService{}
+	return &TermService{
+		client:   p.client,
+		endpoint: fmt.Sprintf("%s/%s/terms", p.client.endpoint, p.projID),
+	}
 }
 
 type TermService struct {
+	client   *Client
+	endpoint string
 }
 
-func (p *TermService) Update(ctx context.Context, term string) error {
-	panic("Not Implemented")
+type Term struct {
+	ID        string            `json:"id"`
+	Content   string            `json:"content" validate:"required"`
+	Active    bool              `json:"active,omitempty"`
+	CreatedAt *common.Timestamp `json:"created_at"`
+	UpdatedAt *common.Timestamp `json:"updated_at"`
 }
 
-func (p *TermService) Get(ctx context.Context) (string, error) {
-	panic("Not Implemented")
+// Update update term content
+func (p *TermService) Update(ctx context.Context, in *Term) (*Term, error) {
+	resp, err := p.client.sendRequest(ctx, request.Post(p.endpoint).JSON(in))
+	if err != nil {
+		return nil, err
+	}
+
+	var term Term
+	defer resp.Body.Close()
+	if err := resp.JSON(&term); err != nil {
+		return nil, err
+	}
+
+	return &term, err
+}
+
+func (p *TermService) Get(ctx context.Context, termID string) (*Term, error) {
+	resp, err := p.client.sendRequest(ctx, request.Get("%s/%s", p.endpoint, termID))
+	if err != nil {
+		return nil, err
+	}
+
+	var term Term
+	defer resp.Body.Close()
+	if err := resp.JSON(&term); err != nil {
+		return nil, err
+	}
+
+	return &term, nil
 }
