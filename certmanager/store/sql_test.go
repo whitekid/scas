@@ -43,17 +43,16 @@ func (s *testSQL) updateStatus(ctx context.Context, projectID string, caPoolID s
 }
 
 const (
-	testProjectID   = "project-id"
 	testProjectName = "project 1"
-	testPoolID      = "pool id"
 	testPoolName    = "pool 1"
 )
 
 func newSQL(ctx context.Context, t *testing.T, dburl string) *testSQL {
+	log.Debugf("@@@@@ Name: %s", t.Name())
 	s := testSQL{sqlStoreImpl: NewSQL(dburl).(*sqlStoreImpl)}
 
-	project := testutils.Must1(s.createProject(ctx, testProjectID, testProjectName))
-	caPool := testutils.Must1(s.createCAPool(ctx, project.ID, testPoolID, testPoolName))
+	project := testutils.Must1(s.createProject(ctx, testProjectName))
+	caPool := testutils.Must1(s.createCAPool(ctx, project.ID, testPoolName))
 	rootCA := testutils.Must1(s.CreateCA(ctx, project.ID, caPool.ID, nil, nil, nil, nil))
 	subCA := testutils.Must1(s.CreateCA(ctx, project.ID, caPool.ID, nil, nil, nil, &rootCA.ID))
 	testutils.Must1(s.CreateCertificate(ctx, project.ID, caPool.ID, &provider.CreateRequest{
@@ -76,10 +75,6 @@ func newSQL(ctx context.Context, t *testing.T, dburl string) *testSQL {
 }
 
 func Test_sqlStoreImpl_listCertificate(t *testing.T) {
-	testutils.ForEachSQLDriver(t, test_sqlStoreImpl_listCertificate)
-}
-
-func test_sqlStoreImpl_listCertificate(t *testing.T, dburl string, resetFixture func()) {
 	type args struct {
 		opts CertificateListOpt
 	}
@@ -94,62 +89,62 @@ func test_sqlStoreImpl_listCertificate(t *testing.T, dburl string, resetFixture 
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			testutils.ForEachSQLDriver(t, func(t *testing.T, dburl string, resetFixture func()) {
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
 
-			resetFixture()
-			s := newSQL(ctx, t, dburl)
+				resetFixture()
+				s := newSQL(ctx, t, dburl)
 
-			got, err := s.listCertificate(ctx, s.projectID, s.caPoolID, tt.args.opts)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("sqlStoreImpl.listCertificate() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
+				got, err := s.listCertificate(ctx, s.projectID, s.caPoolID, tt.args.opts)
+				if (err != nil) != tt.wantErr {
+					t.Errorf("sqlStoreImpl.listCertificate() error = %v, wantErr %v", err, tt.wantErr)
+					return
+				}
 
-			require.Equal(t, tt.wantLen, len(got))
+				require.Equal(t, tt.wantLen, len(got))
 
-			if tt.args.opts.Status != common.StatusNone {
-				certs := fx.Filter(got, func(x *models.Certificate) bool { return x.Status != tt.args.opts.Status.String() })
-				require.Equal(t, 0, len(certs))
-			}
+				if tt.args.opts.Status != common.StatusNone {
+					certs := fx.Filter(got, func(x *models.Certificate) bool { return x.Status != tt.args.opts.Status.String() })
+					require.Equal(t, 0, len(certs))
+				}
+			})
 		})
 	}
 }
 
 func Test_sqlStoreImpl_CreateCAPool(t *testing.T) {
-	testutils.ForEachSQLDriver(t, test_sqlStoreImpl_CreateCAPool)
-}
+	testutils.ForEachSQLDriver(t, func(t *testing.T, dburl string, resetFixture func()) {
+		type args struct {
+			projectID  string
+			caPoolName string
+		}
+		tests := []struct {
+			name      string
+			args      args
+			wantErr   bool
+			targetErr error
+		}{
+			{"duplicate name", args{"", testPoolName}, true, gormx.ErrUniqueConstraintFailed},
+			{"invalid project id", args{"invalid-project", "pool-x"}, true, gormx.ErrForeignKeyConstraintFailed},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
 
-func test_sqlStoreImpl_CreateCAPool(t *testing.T, dburl string, resetFixture func()) {
-	type args struct {
-		projectID  string
-		caPoolName string
-	}
-	tests := []struct {
-		name      string
-		args      args
-		wantErr   bool
-		targetErr error
-	}{
-		{"duplicate name", args{"", testPoolName}, true, gormx.ErrUniqueConstraintFailed},
-		{"invalid project id", args{"invalid-project", "pool-x"}, true, gormx.ErrForeignKeyConstraintFailed},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+				resetFixture()
+				s := newSQL(ctx, t, dburl)
 
-			resetFixture()
-			s := newSQL(ctx, t, dburl)
+				projectID := fx.Ternary(tt.args.projectID == "", s.projectID, tt.args.projectID)
 
-			projectID := fx.Ternary(tt.args.projectID == "", s.projectID, tt.args.projectID)
-
-			_, err := s.CreateCAPool(ctx, projectID, tt.args.caPoolName)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("sqlStoreImpl.CreateCAPool() error = %v, wantErr %+v", err, tt.wantErr)
-				return
-			}
-			require.ErrorIs(t, err, tt.targetErr)
-		})
-	}
+				_, err := s.CreateCAPool(ctx, projectID, tt.args.caPoolName)
+				if (err != nil) != tt.wantErr {
+					t.Errorf("sqlStoreImpl.CreateCAPool() error = %v, wantErr %+v", err, tt.wantErr)
+					return
+				}
+				require.ErrorIs(t, err, tt.targetErr)
+			})
+		}
+	})
 }

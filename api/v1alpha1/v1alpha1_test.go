@@ -23,7 +23,7 @@ import (
 )
 
 func newTestServer(ctx context.Context, t *testing.T) *httptest.Server {
-	testdb := testutils.DBName(t)
+	testdb := testutils.DBName(t.Name())
 	os.RemoveAll(testdb + ".db")
 
 	repo := certmanager.New(provider.Native(), store.NewSQL("sqlite://"+testdb+".db"))
@@ -36,7 +36,7 @@ func newTestServer(ctx context.Context, t *testing.T) *httptest.Server {
 }
 
 func newTestServerWithFixture(ctx context.Context, t *testing.T) (*httptest.Server, *TestRepo) {
-	testdb := testutils.DBName(t)
+	testdb := testutils.DBName(t.Name())
 	os.RemoveAll(testdb + ".db")
 
 	repo := certmanager.New(provider.Native(), store.NewSQL("sqlite://"+testdb+".db"))

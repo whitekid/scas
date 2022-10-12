@@ -58,5 +58,12 @@ func (t *Timestamp) AddDate(years, month, days int) *Timestamp {
 	return NewTimestamp(t.Time.AddDate(years, month, days))
 }
 
-func (t *Timestamp) Add(d time.Duration) *Timestamp      { return NewTimestamp(t.Time.Add(d)) }
-func (t *Timestamp) Truncate(d time.Duration) *Timestamp { return NewTimestamp(t.Time.Truncate(d)) }
+func (t *Timestamp) Add(d time.Duration) *Timestamp { return NewTimestamp(t.Time.Add(d)) }
+
+func (t *Timestamp) Truncate(d time.Duration) *Timestamp {
+	if t == nil {
+		return nil
+	}
+
+	return NewTimestamp(t.Time.Truncate(d))
+}

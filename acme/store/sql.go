@@ -486,7 +486,7 @@ func modelsToOrder(order *models.Order) *Order {
 				Identifiers: modelsToIdentifier(order.Identifiers),
 				NotBefore:   timeToTimestamp(order.NotBefore),
 				NotAfter:    timeToTimestamp(order.NotAfter),
-				Authz:       fx.Map(order.Authz, func(authz models.Authz) string { return authz.ID }),
+				Authz:       fx.Map(order.Authz, func(authz *models.Authz) string { return authz.ID }),
 				Certificate: fx.TernaryCF(order.Certificate == nil, func() string { return "" }, func() string { return order.Certificate.ID }),
 			},
 			ID: order.ID,

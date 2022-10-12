@@ -3,7 +3,6 @@ package testutils
 import (
 	"fmt"
 	"strings"
-	"testing"
 )
 
 func Must(err error) {
@@ -19,10 +18,10 @@ func Must1[T any](v T, err error) T {
 	return v
 }
 
-func DBName(t *testing.T) string {
+func DBName(name string) string {
 	return strings.ToLower(strings.NewReplacer(
 		"/", "_",
 		":", "_",
 		"#", "_",
-	).Replace(t.Name()))
+	).Replace(name))
 }
