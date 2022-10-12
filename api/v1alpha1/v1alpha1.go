@@ -47,10 +47,10 @@ func (app *v1Alpha1API) PathAndName() (string, string) { return "/v1alpha1", "v1
 type Context struct {
 	echo.Context
 
-	// path parameters
-	projectID     string
-	caPoolID      string
-	caID          string
+	// extracted information from path parameters
+	project       *types.Project
+	caPool        *types.CAPool
+	ca            *types.CertificateAuthority
 	certificateID string
 }
 
@@ -70,32 +70,90 @@ func customContext() echo.MiddlewareFunc {
 func (app *v1Alpha1API) Route(e *echo.Group) {
 	e.Use(handleError)
 
-	projectID := helper.ExtractParam("project_id", func(c echo.Context, val string) { c.(*Context).projectID = val })
-	caPoolID := helper.ExtractParam("capool", func(c echo.Context, val string) { c.(*Context).caPoolID = val })
-	caID := helper.ExtractParam("ca_id", func(c echo.Context, val string) { c.(*Context).caID = val })
 	certificateID := helper.ExtractParam("certificate_id", func(c echo.Context, val string) { c.(*Context).certificateID = val })
 
-	e.Use(customContext())
-	e.Use(projectID)
+	e.Use(customContext(), app.extractProjectID(), app.extractCAPoolID(), app.extractCAID())
 
 	e.POST("/", app.createProject)
 	e.GET("/", app.listProject)
-	e.GET("/:project_id", app.getProject, projectID)
+	e.GET("/:project_id", app.getProject)
 
 	e.POST("/:project_id/capools", app.createCAPool)
 	e.GET("/:project_id/capools", app.listCAPool)
-	e.GET("/:project_id/capools/:capool", app.getCAPool, caPoolID)
+	e.GET("/:project_id/capools/:capool", app.getCAPool)
 
-	e.POST("/:project_id/capools/:capool/ca", app.createCA, caPoolID)
-	e.GET("/:project_id/capools/:capool/ca/:ca_id", app.getCA, caPoolID, caID)
-	e.GET("/:project_id/capools/:capool/crl", app.getCRL, caPoolID)
+	e.POST("/:project_id/capools/:capool/ca", app.createCA)
+	e.GET("/:project_id/capools/:capool/ca/:ca_id", app.getCA)
+	e.GET("/:project_id/capools/:capool/crl", app.getCRL)
 
-	e.POST("/:project_id/capools/:capool/certificates", app.createCertificate, caPoolID)
-	e.GET("/:project_id/capools/:capool/certificates", app.listCertificate, caPoolID)
-	e.GET("/:project_id/capools/:capool/certificates/:certificate_id", app.getCertificate, caPoolID, certificateID)
+	e.POST("/:project_id/capools/:capool/certificates", app.createCertificate)
+	e.GET("/:project_id/capools/:capool/certificates", app.listCertificate)
+	e.GET("/:project_id/capools/:capool/certificates/:certificate_id", app.getCertificate, certificateID)
 
-	e.POST("/:project_id/capools/:capool/certificates/:certificate_id/renewal", app.renewCertificate, caPoolID, certificateID)
-	e.POST("/:project_id/capools/:capool/certificates/:certificate_id/revoke", app.revokeCertificate, caPoolID, certificateID)
+	e.POST("/:project_id/capools/:capool/certificates/:certificate_id/renewal", app.renewCertificate, certificateID)
+	e.POST("/:project_id/capools/:capool/certificates/:certificate_id/revoke", app.revokeCertificate, certificateID)
+}
+
+func (app *v1Alpha1API) extractProjectID() echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			projID := c.Param("project_id")
+			if projID == "" {
+				c.(*Context).project = &types.Project{}
+			} else {
+				proj, err := app.repository.GetProject(c.Request().Context(), projID)
+				if err != nil {
+					return err
+				}
+
+				c.(*Context).project = proj
+			}
+
+			return next(c)
+		}
+	}
+}
+
+func (app *v1Alpha1API) extractCAPoolID() echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			cc := c.(*Context)
+			caPoolID := c.Param("capool")
+			if caPoolID == "" {
+				cc.caPool = &types.CAPool{}
+			} else {
+				capool, err := app.repository.GetCAPool(c.Request().Context(), cc.project.ID, caPoolID)
+				if err != nil {
+					return err
+				}
+
+				cc.caPool = capool
+			}
+
+			return next(c)
+		}
+	}
+}
+
+func (app *v1Alpha1API) extractCAID() echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			cc := c.(*Context)
+			caID := c.Param("ca_id")
+			if caID == "" {
+				cc.ca = &types.CertificateAuthority{}
+			} else {
+				ca, err := app.repository.GetCertificateAuthority(c.Request().Context(), cc.project.ID, cc.caPool.ID, caID)
+				if err != nil {
+					return err
+				}
+
+				cc.ca = ca
+			}
+
+			return next(c)
+		}
+	}
 }
 
 func handleError(next echo.HandlerFunc) echo.HandlerFunc {
@@ -139,9 +197,7 @@ func (app *v1Alpha1API) createProject(c echo.Context) error {
 		return err
 	}
 
-	cc := c.(*Context)
-
-	capool, err := app.repository.CreateProject(c.Request().Context(), cc.projectID)
+	capool, err := app.repository.CreateProject(c.Request().Context(), req.Name)
 	if err != nil {
 		return err
 	}
@@ -169,12 +225,11 @@ func (app *v1Alpha1API) listProject(c echo.Context) error {
 func (app *v1Alpha1API) getProject(c echo.Context) error {
 	cc := c.(*Context)
 
-	project, err := app.repository.GetProject(c.Request().Context(), cc.projectID)
-	if err != nil {
-		return err
+	if cc.project.ID == "" {
+		return echo.ErrNotFound
 	}
 
-	return c.JSON(http.StatusOK, project)
+	return c.JSON(http.StatusOK, cc.project)
 }
 
 func (app *v1Alpha1API) createCAPool(c echo.Context) error {
@@ -186,7 +241,7 @@ func (app *v1Alpha1API) createCAPool(c echo.Context) error {
 
 	cc := c.(*Context)
 
-	capool, err := app.repository.CreateCAPool(c.Request().Context(), cc.projectID, req.Name)
+	capool, err := app.repository.CreateCAPool(c.Request().Context(), cc.project.ID, req.Name)
 	if err != nil {
 		return err
 	}
@@ -197,7 +252,7 @@ func (app *v1Alpha1API) createCAPool(c echo.Context) error {
 func (app *v1Alpha1API) listCAPool(c echo.Context) error {
 	cc := c.(*Context)
 
-	items, err := app.repository.ListCAPool(c.Request().Context(), cc.projectID, certmanager.CAPoolListOpt{})
+	items, err := app.repository.ListCAPool(c.Request().Context(), cc.project.ID, certmanager.CAPoolListOpt{})
 	if err != nil {
 		return err
 	}
@@ -216,12 +271,11 @@ func (app *v1Alpha1API) listCAPool(c echo.Context) error {
 func (app *v1Alpha1API) getCAPool(c echo.Context) error {
 	cc := c.(*Context)
 
-	caPool, err := app.repository.GetCAPool(c.Request().Context(), cc.projectID, cc.caPoolID)
-	if err != nil {
-		return err
+	if cc.caPool.ID == "" {
+		return echo.ErrNotFound
 	}
 
-	return c.JSON(http.StatusOK, caPool)
+	return c.JSON(http.StatusOK, cc.caPool)
 }
 
 func (app *v1Alpha1API) createCA(c echo.Context) error {
@@ -254,29 +308,44 @@ func (app *v1Alpha1API) createCA(c echo.Context) error {
 
 	goxp.IfThen(len(req.CRL) > 0, func() { creq.CRL = []string{req.CRL} })
 
-	ca, err := app.repository.CreateCertificateAuthority(c.Request().Context(), cc.projectID, cc.caPoolID, creq, req.CAID)
+	ca, err := app.repository.CreateCertificateAuthority(c.Request().Context(), cc.project.ID, cc.caPool.ID, creq, req.CAID)
 	if err != nil {
 		return err
 	}
 
-	cc.caID = ca.ID
-	return app.getCA(c)
+	res, err := caToResource(ca)
+	if err != nil {
+		return err
+	}
+	return c.JSON(http.StatusCreated, res)
 }
 
 func (app *v1Alpha1API) getCA(c echo.Context) error {
 	cc := c.(*Context)
 
-	ca, err := app.repository.GetCertificateAuthority(c.Request().Context(), cc.projectID, cc.caPoolID, cc.caID)
-	if err != nil {
-		return errors.Wrap(err, "fail to get ca")
+	if cc.ca.ID == "" {
+		return echo.ErrNotFound
 	}
 
 	var req certmanager.CreateRequest
-	if err := json.Unmarshal([]byte(ca.Request), &req); err != nil {
+	if err := json.Unmarshal([]byte(cc.ca.Request), &req); err != nil {
 		return errors.Wrap(err, "fail to get ca")
 	}
 
-	return c.JSON(http.StatusOK, &v1alpha1.CertificateRequest{
+	res, err := caToResource(cc.ca)
+	if err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, res)
+}
+
+func caToResource(ca *types.CertificateAuthority) (*v1alpha1.CertificateRequest, error) {
+	var req certmanager.CreateRequest
+	if err := json.Unmarshal([]byte(ca.Request), &req); err != nil {
+		return nil, errors.Wrap(err, "fail to get ca")
+	}
+
+	return &v1alpha1.CertificateRequest{
 		ID:                 ca.ID,
 		CAID:               fx.TernaryCF(ca.CAID == nil, func() string { return "" }, func() string { return *ca.CAID }),
 		CN:                 req.CommonName,
@@ -294,13 +363,13 @@ func (app *v1Alpha1API) getCA(c echo.Context) error {
 		NotAfter:           req.NotAfter,
 		NotBefore:          req.NotBefore,
 		CRL:                fx.TernaryCF(len(req.CRL) > 0, func() string { return req.CRL[0] }, func() string { return "" }),
-	})
+	}, nil
 }
 
 func (app *v1Alpha1API) getCRL(c echo.Context) error {
 	cc := c.(*Context)
 
-	crl, err := app.repository.GetCRL(c.Request().Context(), cc.projectID, cc.caPoolID)
+	crl, err := app.repository.GetCRL(c.Request().Context(), cc.project.ID, cc.caPool.ID)
 	if err != nil {
 		return err
 	}
@@ -338,7 +407,7 @@ func (app *v1Alpha1API) createCertificate(c echo.Context) error {
 
 	goxp.IfThen(len(req.CRL) > 0, func() { creq.CRL = []string{req.CRL} })
 
-	cert, err := app.repository.CreateCertificate(c.Request().Context(), cc.projectID, cc.caPoolID, creq, req.CAID)
+	cert, err := app.repository.CreateCertificate(c.Request().Context(), cc.project.ID, cc.caPool.ID, creq, req.CAID)
 	if err != nil {
 		return err
 	}
@@ -350,7 +419,7 @@ func (app *v1Alpha1API) createCertificate(c echo.Context) error {
 func (app *v1Alpha1API) listCertificate(c echo.Context) error {
 	cc := c.(*Context)
 
-	certs, err := app.repository.ListCertificate(c.Request().Context(), cc.projectID, cc.caPoolID, certmanager.CertificateListOpt{CN: c.Param("cn")})
+	certs, err := app.repository.ListCertificate(c.Request().Context(), cc.project.ID, cc.caPool.ID, certmanager.CertificateListOpt{CN: c.Param("cn")})
 	if err != nil {
 		return err
 	}
@@ -372,7 +441,7 @@ func (app *v1Alpha1API) listCertificate(c echo.Context) error {
 func (app *v1Alpha1API) getCertificate(c echo.Context) error {
 	cc := c.(*Context)
 
-	cert, err := app.repository.GetCertificate(c.Request().Context(), cc.projectID, cc.caPoolID, cc.certificateID)
+	cert, err := app.repository.GetCertificate(c.Request().Context(), cc.project.ID, cc.caPool.ID, cc.certificateID)
 	if err != nil {
 		return err
 	}
@@ -392,7 +461,7 @@ func (app *v1Alpha1API) getCertificate(c echo.Context) error {
 func (app *v1Alpha1API) renewCertificate(c echo.Context) error {
 	cc := c.(*Context)
 
-	newCert, err := app.repository.RenewCertificate(c.Request().Context(), cc.projectID, cc.caPoolID, cc.certificateID)
+	newCert, err := app.repository.RenewCertificate(c.Request().Context(), cc.project.ID, cc.caPool.ID, cc.certificateID)
 	if err != nil {
 		return err
 	}
@@ -409,7 +478,7 @@ func (app *v1Alpha1API) revokeCertificate(c echo.Context) error {
 	}
 
 	cc := c.(*Context)
-	revoked, err := app.repository.RevokeCertificate(c.Request().Context(), cc.projectID, cc.caPoolID, cc.certificateID, req.Reason)
+	revoked, err := app.repository.RevokeCertificate(c.Request().Context(), cc.project.ID, cc.caPool.ID, cc.certificateID, req.Reason)
 	if err != nil {
 		return err
 	}

@@ -1,8 +1,8 @@
 package models
 
 import (
-	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/whitekid/goxp"
@@ -15,12 +15,8 @@ import (
 	"scas/pkg/testutils"
 )
 
-func newFixture(t *testing.T) *fixture {
-	dbname := testutils.DBName(t)
-	os.RemoveAll(dbname + ".db")
-	dburl := "sqlite://" + dbname + ".db"
-
-	db := testutils.Must1(gormx.Open(dburl, &gorm.Config{
+func newFixture(t *testing.T, dbURL string) *fixture {
+	db := testutils.Must1(gormx.Open(dbURL, &gorm.Config{
 		NamingStrategy: schema.NamingStrategy{
 			TablePrefix: "acme_",
 		},
@@ -79,131 +75,143 @@ type fixture struct {
 }
 
 func TestNonce(t *testing.T) {
-	fixture := newFixture(t)
+	testutils.ForEachSQLDriver(t, func(t *testing.T, dbURL string, reset func()) {
+		fixture := newFixture(t, dbURL)
 
-	nonce := &Nonce{ProjectID: fixture.proj.ID}
-	require.NoError(t, fixture.Create(nonce).Error)
+		nonce := &Nonce{ProjectID: fixture.proj.ID, Expire: time.Now().Add(30 * time.Minute)}
+		require.NoError(t, fixture.Create(nonce).Error)
 
-	var got Nonce
-	require.NoError(t, fixture.First(&got, "id = ?", nonce.ID).Error)
+		var got Nonce
+		require.NoError(t, fixture.First(&got, "id = ?", nonce.ID).Error)
+	})
 }
 
 func TestProject(t *testing.T) {
-	fixture := newFixture(t)
+	testutils.ForEachSQLDriver(t, func(t *testing.T, dbURL string, reset func()) {
+		fixture := newFixture(t, dbURL)
 
-	proj := &Project{
-		Name: "test",
-	}
-	require.NoError(t, fixture.Create(proj).Error)
+		proj := &Project{
+			Name: "test",
+		}
+		require.NoError(t, fixture.Create(proj).Error)
 
-	var got Project
-	require.NoError(t, fixture.First(&got, "id = ?", proj.ID).Error)
+		var got Project
+		require.NoError(t, fixture.First(&got, "id = ?", proj.ID).Error)
+	})
 }
 
 func TestTerm(t *testing.T) {
-	fixture := newFixture(t)
+	testutils.ForEachSQLDriver(t, func(t *testing.T, dbURL string, reset func()) {
+		fixture := newFixture(t, dbURL)
 
-	term := &Term{ProjectID: fixture.proj.ID, Content: "term of service"}
-	require.NoError(t, fixture.Create(term).Error)
+		term := &Term{ProjectID: fixture.proj.ID, Content: "term of service"}
+		require.NoError(t, fixture.Create(term).Error)
 
-	tx := fixture.Model(&Project{Name: "dummy"}).Where("id = ?", fixture.proj.ID).Update("term_id", term.ID)
-	require.NoError(t, tx.Error)
-	require.Equal(t, int64(1), tx.RowsAffected)
+		tx := fixture.Model(&Project{Name: "dummy"}).Where("id = ?", fixture.proj.ID).Update("term_id", term.ID)
+		require.NoError(t, tx.Error)
+		require.Equal(t, int64(1), tx.RowsAffected)
+	})
 }
 
 func TestAccount(t *testing.T) {
-	fixture := newFixture(t)
+	testutils.ForEachSQLDriver(t, func(t *testing.T, dbURL string, reset func()) {
+		fixture := newFixture(t, dbURL)
 
-	type args struct {
-		contacts []string
-	}
-	tests := [...]struct {
-		name    string
-		args    args
-		wantErr bool
-	}{
-		{`empty contact`, args{}, true},
-		{`valid`, args{[]string{"mailto:user1@example.com", "mailto:user2@example.com"}}, false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			acct := &Account{
-				Contacts:  tt.args.contacts,
-				Status:    acmeclient.AccountStatusValid.String(),
-				Key:       goxp.RandomString(10),
-				ProjectID: fixture.proj.ID,
-			}
-			err := fixture.Create(acct).Error
-			require.Truef(t, (err != nil) == tt.wantErr, `Account() failed: error = %+v, wantErr = %v`, err, tt.wantErr)
-			if tt.wantErr {
-				return
-			}
+		type args struct {
+			contacts []string
+		}
+		tests := [...]struct {
+			name    string
+			args    args
+			wantErr bool
+		}{
+			{`empty contact`, args{}, true},
+			{`valid`, args{[]string{"mailto:user1@example.com", "mailto:user2@example.com"}}, false},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				acct := &Account{
+					Contacts:  tt.args.contacts,
+					Status:    acmeclient.AccountStatusValid.String(),
+					Key:       goxp.RandomString(10),
+					ProjectID: fixture.proj.ID,
+				}
+				err := fixture.Create(acct).Error
+				require.Truef(t, (err != nil) == tt.wantErr, `Account() failed: error = %+v, wantErr = %v`, err, tt.wantErr)
+				if tt.wantErr {
+					return
+				}
 
-			var got Account
-			require.NoError(t, fixture.First(&got, "id = ?", acct.ID).Error)
-			require.Equal(t, acct.ID, got.ID)
-			require.Equal(t, acct.Contacts, got.Contacts)
-		})
-	}
+				var got Account
+				require.NoError(t, fixture.First(&got, "id = ?", acct.ID).Error)
+				require.Equal(t, acct.ID, got.ID)
+				require.Equal(t, acct.Contacts, got.Contacts)
+			})
+		}
+	})
 }
 
 func TestAuthz(t *testing.T) {
-	fixture := newFixture(t)
+	testutils.ForEachSQLDriver(t, func(t *testing.T, dbURL string, reset func()) {
+		fixture := newFixture(t, dbURL)
 
-	type args struct {
-		idents Identifier
-	}
-	tests := [...]struct {
-		name    string
-		args    args
-		wantErr bool
-	}{
-		{`empty identifier type`, args{}, true},
-		{`invalid identifier type`, args{NewIdentifier([]Ident{{Type: "", Value: "hello.example.com"}})}, true},
-		{`valid`, args{NewIdentifier([]Ident{{Type: "dns", Value: "hello.example.com"}})}, false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			authz := &Authz{
-				AccountID:  fixture.acct.ID,
-				OrderID:    fixture.order.ID,
-				Identifier: tt.args.idents,
-				Status:     acmeclient.AuthzStatusValid.String(),
-				Expires:    helper.NowP(),
-				ProjectID:  fixture.proj.ID,
-			}
-			err := fixture.Create(authz).Error
-			require.Truef(t, (err != nil) == tt.wantErr, `Authz() failed: error = %+v, wantErr = %v`, err, tt.wantErr)
-			if tt.wantErr {
-				return
-			}
+		type args struct {
+			idents Identifier
+		}
+		tests := [...]struct {
+			name    string
+			args    args
+			wantErr bool
+		}{
+			{`empty identifier type`, args{}, true},
+			{`invalid identifier type`, args{NewIdentifier([]Ident{{Type: "", Value: "hello.example.com"}})}, true},
+			{`valid`, args{NewIdentifier([]Ident{{Type: "dns", Value: "hello.example.com"}})}, false},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				authz := &Authz{
+					AccountID:  fixture.acct.ID,
+					OrderID:    fixture.order.ID,
+					Identifier: tt.args.idents,
+					Status:     acmeclient.AuthzStatusValid.String(),
+					Expires:    helper.NowP(),
+					ProjectID:  fixture.proj.ID,
+				}
+				err := fixture.Create(authz).Error
+				require.Truef(t, (err != nil) == tt.wantErr, `Authz() failed: error = %+v, wantErr = %v`, err, tt.wantErr)
+				if tt.wantErr {
+					return
+				}
 
-			chal := &Challenge{
-				AuthzID:   authz.ID,
-				Type:      acmeclient.ChallengeTypeHttp01.String(),
-				Status:    acmeclient.ChallengeStatusPending.String(),
-				ProjectID: fixture.proj.ID,
-			}
-			require.NoError(t, fixture.Create(chal).Error)
+				chal := &Challenge{
+					AuthzID:   authz.ID,
+					Type:      acmeclient.ChallengeTypeHttp01.String(),
+					Status:    acmeclient.ChallengeStatusPending.String(),
+					ProjectID: fixture.proj.ID,
+				}
+				require.NoError(t, fixture.Create(chal).Error)
 
-			got := &Authz{}
-			require.NoError(t, fixture.Preload("Challenges").First(got, "id = ?", authz.ID).Error)
-			require.Equal(t, authz.ID, got.ID)
-			require.NotEmpty(t, got.Challenges)
-		})
-	}
+				got := &Authz{}
+				require.NoError(t, fixture.Preload("Challenges").First(got, "id = ?", authz.ID).Error)
+				require.Equal(t, authz.ID, got.ID)
+				require.NotEmpty(t, got.Challenges)
+			})
+		}
+	})
 }
 
 func TestCertificate(t *testing.T) {
-	fixture := newFixture(t)
+	testutils.ForEachSQLDriver(t, func(t *testing.T, dbURL string, reset func()) {
+		fixture := newFixture(t, dbURL)
 
-	cert := &Certificate{
-		Chain:     goxp.RandomByte(20),
-		ProjectID: fixture.proj.ID,
-		OrderID:   fixture.order.ID,
-	}
-	require.NoError(t, fixture.Create(cert).Error)
+		cert := &Certificate{
+			Chain:     goxp.RandomByte(20),
+			ProjectID: fixture.proj.ID,
+			OrderID:   fixture.order.ID,
+		}
+		require.NoError(t, fixture.Create(cert).Error)
 
-	var got Certificate
-	require.NoError(t, fixture.First(&got, "id = ?", cert.ID).Error)
+		var got Certificate
+		require.NoError(t, fixture.First(&got, "id = ?", cert.ID).Error)
+	})
 }

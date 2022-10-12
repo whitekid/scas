@@ -11,7 +11,7 @@ import (
 	"github.com/whitekid/goxp/fx"
 )
 
-func ForEachSQLDriver(t *testing.T, testfn func(t *testing.T, driver string, reset func())) {
+func ForEachSQLDriver(t *testing.T, testfn func(t *testing.T, dbURL string, reset func())) {
 	fx.ForEach([]string{"sqlite", "mysql", "pgsql"}, func(_ int, driver string) { forOneDriver(t, driver, testfn) })
 }
 
@@ -22,8 +22,10 @@ func forOneDriver(t *testing.T, driver string, testfn func(t *testing.T, dbURL s
 			return
 		}
 
-		dbname := DBName(t)
+		dbname := DBName(t.Name())
 		dburl := ""
+		var db *sql.DB
+		var err error
 		var reset = func() {}
 		switch driver {
 		case "sqlite":
@@ -31,12 +33,13 @@ func forOneDriver(t *testing.T, driver string, testfn func(t *testing.T, dbURL s
 			dburl = fmt.Sprintf("sqlite://%s.db", dbname)
 
 		case "mysql":
-			db, err := sql.Open("mysql", "root:@tcp(127.0.0.1:3306)/mysql")
+			db, err = sql.Open("mysql", "root:@tcp(127.0.0.1:3306)/mysql")
 			require.NoError(t, err)
-			defer db.Close()
 
 			reset = func() {
-				db.Exec("DROP DATABASE " + dbname)
+				_, err := db.Exec("DROP DATABASE IF EXISTS" + dbname)
+				require.NoError(t, err)
+
 				_, err = db.Exec("CREATE DATABASE " + dbname)
 				require.NoError(t, err)
 			}
@@ -46,10 +49,10 @@ func forOneDriver(t *testing.T, driver string, testfn func(t *testing.T, dbURL s
 		case "pgsql":
 			db, err := sql.Open("pgx", "dbname=postgres")
 			require.NoError(t, err)
-			defer db.Close()
 
 			reset = func() {
-				db.Exec("DROP DATABASE " + dbname)
+				_, err = db.Exec("DROP DATABASE IF EXISTS " + dbname)
+				require.NoError(t, err)
 				_, err = db.Exec("CREATE DATABASE " + dbname)
 				require.NoError(t, err)
 			}

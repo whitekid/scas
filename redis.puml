@@ -1,0 +1,3 @@
+@startuml MySQL TLS
+RedisClient -> RedisServer: connect
+@enduml

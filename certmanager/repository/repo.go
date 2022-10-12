@@ -77,6 +77,8 @@ type crlInfo struct {
 }
 
 func (repo *repoImpl) CreateProject(ctx context.Context, name string) (*types.Project, error) {
+	log.Debugf("@@@@ CreateProject(): name=%s", name)
+
 	proj, err := repo.store.CreateProject(ctx, name)
 	if err != nil {
 		return nil, errors.Wrap(err, "fail to create project")

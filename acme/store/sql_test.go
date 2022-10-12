@@ -2,8 +2,6 @@ package store
 
 import (
 	"context"
-	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -25,18 +23,8 @@ type testSQL struct {
 	authz *Authz
 }
 
-func newFixture(ctx context.Context, t *testing.T, scheme string) *testSQL {
-	dbname := testutils.DBName(t)
-	var dburl string
-	switch scheme {
-	case "sqlite":
-		os.Remove(dbname + ".db")
-		dburl = fmt.Sprintf("sqlite://%s.db", dbname)
-	default:
-		require.Failf(t, "not supported scheme", scheme)
-	}
-
-	s := NewSQLStore(dburl).(*sqlStoreImpl)
+func newFixture(ctx context.Context, t *testing.T, dbURL string) *testSQL {
+	s := NewSQLStore(dbURL).(*sqlStoreImpl)
 
 	proj := testutils.Must1(s.CreateProject(ctx, &Project{Name: "test project"}))
 
@@ -100,59 +88,68 @@ func newFixture(ctx context.Context, t *testing.T, scheme string) *testSQL {
 }
 
 func TestNonce(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	testutils.ForEachSQLDriver(t, func(t *testing.T, dbURL string, resetFixture func()) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 
-	s := newFixture(ctx, t, "sqlite")
+		s := newFixture(ctx, t, dbURL)
 
-	nonce, err := s.CreateNonce(ctx, s.proj.ID)
-	require.NoError(t, err)
-	require.NotEmpty(t, nonce)
+		nonce, err := s.CreateNonce(ctx, s.proj.ID)
+		require.NoError(t, err)
+		require.NotEmpty(t, nonce)
 
-	require.True(t, s.ValidNonce(ctx, s.proj.ID, nonce))
+		require.True(t, s.ValidNonce(ctx, s.proj.ID, nonce))
 
-	// create another nonce
-	nonce2, err := s.CreateNonce(ctx, s.proj.ID)
-	require.NoError(t, err)
+		// create another nonce
+		nonce2, err := s.CreateNonce(ctx, s.proj.ID)
+		require.NoError(t, err)
 
-	// expire nonce
-	require.NoError(t, s.db.Model(&models.Nonce{ID: nonce2, ProjectID: s.proj.ID}).Update("expire", time.Now().UTC().Add(-time.Hour)).Error)
-	require.False(t, s.ValidNonce(ctx, s.proj.ID, nonce2))
+		// expire nonce
+		require.NoError(t, s.db.Model(&models.Nonce{
+			ID:        nonce2,
+			ProjectID: s.proj.ID,
+			Expire:    time.Now().Add(30 * time.Minute),
+		}).Update("expire", time.Now().UTC().Add(-time.Hour)).Error)
+		require.False(t, s.ValidNonce(ctx, s.proj.ID, nonce2))
 
-	require.NoError(t, s.CleanupExpiredNonce(ctx))
+		require.NoError(t, s.CleanupExpiredNonce(ctx))
 
-	var nonceCount int64
-	require.NoError(t, s.db.Model(&models.Nonce{}).Count(&nonceCount).Error)
-	require.Equal(t, int64(1), nonceCount)
+		var nonceCount int64
+		require.NoError(t, s.db.Model(&models.Nonce{}).Count(&nonceCount).Error)
+		require.Equal(t, int64(1), nonceCount)
 
-	require.True(t, s.ValidNonce(ctx, s.proj.ID, nonce))
-	require.False(t, s.ValidNonce(ctx, s.proj.ID, nonce2))
+		require.True(t, s.ValidNonce(ctx, s.proj.ID, nonce))
+		require.False(t, s.ValidNonce(ctx, s.proj.ID, nonce2))
+	})
 }
 
 func TestAccount(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	testutils.ForEachSQLDriver(t, func(t *testing.T, dbURL string, resetFixture func()) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 
-	s := newFixture(ctx, t, "sqlite")
+		s := newFixture(ctx, t, dbURL)
 
-	{
-		got, err := s.GetAccount(ctx, s.proj.ID, s.acct.ID)
-		require.NoError(t, err)
-		require.Equal(t, s.acct, got)
-	}
+		{
+			got, err := s.GetAccount(ctx, s.proj.ID, s.acct.ID)
+			require.NoError(t, err)
+			require.Equal(t, s.acct, got)
+		}
 
-	{
-		got, err := s.GetAccountByKey(ctx, s.proj.ID, s.acct.Key)
-		require.NoError(t, err)
-		require.Equal(t, s.acct, got)
-	}
+		{
+			got, err := s.GetAccountByKey(ctx, s.proj.ID, s.acct.Key)
+			require.NoError(t, err)
+			require.Equal(t, s.acct, got)
+		}
+	})
 }
 
-func TestOrder(t *testing.T) {
+func TestOrder(t *testing.T) { testutils.ForEachSQLDriver(t, testOrder) }
+func testOrder(t *testing.T, dbURL string, resetFixture func()) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	s := newFixture(ctx, t, "sqlite")
+	s := newFixture(ctx, t, dbURL)
 
 	// create order, authz and challenge
 	order, err := s.CreateOrder(ctx, &Order{
@@ -206,7 +203,8 @@ func TestOrder(t *testing.T) {
 	{
 		got, err := s.GetOrder(ctx, order.ID)
 		require.NoError(t, err)
-		require.Equal(t, order, got)
+		require.InDelta(t, got.Expires.UnixMilli(), order.Expires.UnixMilli(), 100)
+		require.Equal(t, order.Status, got.Status)
 		require.Equal(t, len(order.Identifiers), len(got.Authz))
 		for _, authID := range got.Authz {
 			authz, err := s.GetAuthz(ctx, authID)
@@ -221,60 +219,65 @@ func TestOrder(t *testing.T) {
 }
 
 func TestAuthz(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	testutils.ForEachSQLDriver(t, func(t *testing.T, dbURL string, resetFixture func()) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 
-	s := newFixture(ctx, t, "sqlite")
+		s := newFixture(ctx, t, dbURL)
 
-	got, err := s.GetAuthz(ctx, s.authz.ID)
-	require.NoError(t, err)
-	require.NotEmpty(t, got.Challenges)
+		got, err := s.GetAuthz(ctx, s.authz.ID)
+		require.NoError(t, err)
+		require.NotEmpty(t, got.Challenges)
 
-	cert, err := s.CreateCertificate(ctx, &Certificate{
-		ProjectID: s.proj.ID,
-		OrderID:   s.order.ID,
-		Chain:     goxp.RandomByte(100),
+		cert, err := s.CreateCertificate(ctx, &Certificate{
+			ProjectID: s.proj.ID,
+			OrderID:   s.order.ID,
+			Chain:     goxp.RandomByte(100),
+		})
+		require.NoError(t, err)
+		require.NotEmpty(t, cert.ID)
+
+		_, err = s.UpdateAuthzStatus(ctx, s.authz.ID, acmeclient.AuthzStatusValid)
+		require.NoError(t, err)
 	})
-	require.NoError(t, err)
-	require.NotEmpty(t, cert.ID)
-
-	_, err = s.UpdateAuthzStatus(ctx, s.authz.ID, acmeclient.AuthzStatusValid)
-	require.NoError(t, err)
 }
 
 func TestChallengeValidate(t *testing.T) {
-	type args struct {
-		challenge *Challenge
-	}
-	tests := [...]struct {
-		name    string
-		args    args
-		wantErr bool
-	}{
-		{
-			`valid`, args{&Challenge{
-				Challenge: &acmeclient.Challenge{
-					Type:   acmeclient.ChallengeTypeHttp01,
-					Status: acmeclient.ChallengeStatusPending,
-				},
-			}}, false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+	testutils.ForEachSQLDriver(t, func(t *testing.T, dbURL string, resetFixture func()) {
+		type args struct {
+			challenge *Challenge
+		}
+		tests := [...]struct {
+			name    string
+			args    args
+			wantErr bool
+		}{
+			{
+				`valid`, args{&Challenge{
+					Challenge: &acmeclient.Challenge{
+						Type:   acmeclient.ChallengeTypeHttp01,
+						Status: acmeclient.ChallengeStatusPending,
+					},
+				}}, false},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
 
-			s := newFixture(ctx, t, "sqlite")
+				resetFixture()
+				s := newFixture(ctx, t, dbURL)
 
-			tt.args.challenge.AuthzID = s.authz.ID
-			tt.args.challenge.ProjectID = s.proj.ID
-			got, err := s.CreateChallenge(ctx, tt.args.challenge)
-			if gormx.IsSQLError(err) {
-				return
-			}
+				tt.args.challenge.AuthzID = s.authz.ID
+				tt.args.challenge.ProjectID = s.proj.ID
+				got, err := s.CreateChallenge(ctx, tt.args.challenge)
+				if gormx.IsSQLError(err) {
+					return
+				}
 
-			require.Truef(t, (err != nil) == tt.wantErr, `CreateChallenge() failed: error = %+v, wantErr = %v, %T`, err, tt.wantErr, err)
-			_ = got
-		})
-	}
+				require.Truef(t, (err != nil) == tt.wantErr, `CreateChallenge() failed: error = %+v, wantErr = %v, %T`, err, tt.wantErr, err)
+				_ = got
+			})
+		}
+	})
 }

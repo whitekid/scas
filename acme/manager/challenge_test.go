@@ -31,7 +31,7 @@ type Fixture struct {
 }
 
 func setupFixture(ctx context.Context, t *testing.T) *Fixture {
-	dbname := testutils.DBName(t)
+	dbname := testutils.DBName(t.Name())
 	os.Remove(dbname + ".db")
 
 	s := store.NewSQLStore("sqlite://" + dbname + ".db")

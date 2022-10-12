@@ -31,7 +31,7 @@ type TestServer struct {
 }
 
 func newTestServer(ctx context.Context, t *testing.T) *TestServer {
-	dbname := testutils.DBName(t)
+	dbname := testutils.DBName(t.Name())
 	os.RemoveAll(dbname + ".db")
 	server := New("sqlite://" + dbname + ".db")
 

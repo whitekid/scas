@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/lithammer/shortuuid/v4"
 	"github.com/whitekid/goxp"
 	"github.com/whitekid/goxp/log"
 	"gorm.io/driver/mysql"
@@ -26,15 +27,15 @@ func Open(dburl string, opts ...gorm.Option) (*gorm.DB, error) {
 
 	switch strings.ToLower(u.Scheme) {
 	case "sqlite", "sqlite3":
-		log.Debugf("opening sqlite...: %s", u.Hostname())
+		log.Debugf("open sqlite database: %s", u.Hostname())
 		dialector = sqlite.Open(u.Hostname())
 
 	case "my", "mysql", "mariadb":
-		log.Debugf("opening mysql...")
+		log.Debugf("open mysql database: %s", u.Path[1:len(u.Path)])
 		dialector = newMySQLDialector(u)
 
 	case "pg", "psql", "pgsql", "postgres", "postgresql":
-		log.Debugf("opening postgresql...")
+		log.Debugf("open postgresql database: %s", u.Path[1:len(u.Path)])
 		dialector = newPgDialector(u)
 	}
 
@@ -114,10 +115,17 @@ func newPgDialector(u *url.URL) gorm.Dialector {
 	return postgres.New(config)
 }
 
+// Count count model
 func Count(tx *gorm.DB) int64 {
 	var c int64
 	if t := tx.Count(&c); t.Error != nil {
 		panic(t.Error)
 	}
 	return c
+}
+
+// GenerateID generate ID
+func GenerateID(id *string) error {
+	*id = shortuuid.New()
+	return nil
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/lithammer/shortuuid/v4"
 	"github.com/pkg/errors"
 	"github.com/whitekid/goxp"
 	"github.com/whitekid/goxp/fx"
@@ -49,7 +48,8 @@ func NewSQL(dburl string) Interface {
 
 func (s *sqlStoreImpl) CreateProject(ctx context.Context, name string) (*types.Project, error) {
 	log.Debugf("CreateProject(): name=%s", name)
-	return s.createProject(ctx, shortuuid.New(), name)
+
+	return s.createProject(ctx, name)
 }
 
 func (s *sqlStoreImpl) GetProject(ctx context.Context, id string) (*types.Project, error) {
@@ -105,8 +105,8 @@ func (s *sqlStoreImpl) listProject(ctx context.Context, opts ProjectListOpt) ([]
 	return results, nil
 }
 
-func (s *sqlStoreImpl) createProject(ctx context.Context, id, name string) (*types.Project, error) {
-	project := &models.Project{ID: id, Name: name}
+func (s *sqlStoreImpl) createProject(ctx context.Context, name string) (*types.Project, error) {
+	project := &models.Project{Name: name}
 	if tx := s.db.Create(project); tx.Error != nil {
 		return nil, gormx.ConvertSQLError(tx.Error)
 	}
@@ -120,24 +120,21 @@ func (s *sqlStoreImpl) createProject(ctx context.Context, id, name string) (*typ
 
 func (s *sqlStoreImpl) CreateCAPool(ctx context.Context, projectID string, caPoolName string) (*types.CAPool, error) {
 	log.Debugf("CreateCAPool(): project=%s, capool=%s", projectID, caPoolName)
-	return s.createCAPool(ctx, projectID, shortuuid.New(), caPoolName)
+	return s.createCAPool(ctx, projectID, caPoolName)
 }
 
-func (s *sqlStoreImpl) createCAPool(ctx context.Context, projectID string, id, name string) (*types.CAPool, error) {
+func (s *sqlStoreImpl) createCAPool(ctx context.Context, projectID string, name string) (*types.CAPool, error) {
 	if err := helper.ValidateStruct(&struct {
 		ProjectID string `validate:"required"`
-		ID        string `validate:"required"`
 		Name      string `validate:"required"`
 	}{
 		ProjectID: projectID,
-		ID:        id,
 		Name:      name,
 	}); err != nil {
 		return nil, err
 	}
 
 	capool := &models.CAPool{
-		ID:        id,
 		Name:      name,
 		ProjectID: projectID,
 	}
@@ -145,7 +142,7 @@ func (s *sqlStoreImpl) createCAPool(ctx context.Context, projectID string, id, n
 		return nil, gormx.ConvertSQLError(tx.Error)
 	}
 
-	return s.GetCAPool(ctx, projectID, id)
+	return s.GetCAPool(ctx, projectID, capool.ID)
 }
 
 func (s *sqlStoreImpl) GetCAPool(ctx context.Context, projectID string, caPoolID string) (*types.CAPool, error) {
@@ -203,10 +200,8 @@ func (s *sqlStoreImpl) listCAPool(ctx context.Context, projectID string, opts CA
 	return results, nil
 }
 
-func (s *sqlStoreImpl) CreateCA(ctx context.Context, projectID, caPoolID string, req *provider.CreateRequest, certPEM, keyPEM []byte, parentCAID *string) (ca *types.CertificateAuthority, err error) {
-	ID := shortuuid.New()
-
-	log.Debugf("CreateCA: ID=%s, project=%s, capool=%s, req=%v, parent=%+v", ID, projectID, caPoolID, req, parentCAID)
+func (s *sqlStoreImpl) CreateCA(ctx context.Context, projectID, caPoolID string, req *provider.CreateRequest, certPEM, keyPEM []byte, parentCAID *string) (*types.CertificateAuthority, error) {
+	log.Debugf("CreateCA: project=%s, capool=%s, req=%v, parent=%+v", projectID, caPoolID, req, parentCAID)
 	if parentCAID != nil {
 		log.Debugf("\tparentCA=%s", *parentCAID)
 		if _, err := s.GetCA(ctx, projectID, caPoolID, *parentCAID); err != nil {
@@ -219,8 +214,7 @@ func (s *sqlStoreImpl) CreateCA(ctx context.Context, projectID, caPoolID string,
 		return nil, errors.Wrap(err, "fail to create certficiate authority")
 	}
 
-	if tx := s.db.Create(&models.CertificateAuthority{
-		ID:        ID,
+	ca := &models.CertificateAuthority{
 		ProjectID: projectID,
 		CAPoolID:  caPoolID,
 		Request:   reqJSON,
@@ -228,11 +222,12 @@ func (s *sqlStoreImpl) CreateCA(ctx context.Context, projectID, caPoolID string,
 		Key:       keyPEM,
 		CAID:      parentCAID,
 		Status:    common.StatusActive.String(),
-	}); tx.Error != nil {
+	}
+	if tx := s.db.Create(ca); tx.Error != nil {
 		return nil, gormx.ConvertSQLError(tx.Error)
 	}
 
-	return s.GetCA(ctx, projectID, caPoolID, ID)
+	return s.GetCA(ctx, projectID, caPoolID, ca.ID)
 }
 
 func (s *sqlStoreImpl) ListCA(ctx context.Context, projectID, caPoolID string, opts CAListOpt) ([]*types.CertificateAuthority, error) {
@@ -301,15 +296,12 @@ func (s *sqlStoreImpl) CreateCertificate(ctx context.Context, projectID, caPoolI
 		return nil, errors.Wrap(err, "fail to create certficiate")
 	}
 
-	certID := shortuuid.New()
-
 	reqJSON, err := json.Marshal(req)
 	if err != nil {
 		return nil, errors.Wrap(err, "fail to create certficiate")
 	}
 
-	if tx := s.db.Create(&models.Certificate{
-		ID:        certID,
+	cert := &models.Certificate{
 		CAID:      parentCAID,
 		ProjectID: projectID,
 		CAPoolID:  caPoolID,
@@ -320,11 +312,12 @@ func (s *sqlStoreImpl) CreateCertificate(ctx context.Context, projectID, caPoolI
 		Status:    common.StatusActive.String(),
 
 		CN: req.CommonName,
-	}); tx.Error != nil {
+	}
+	if tx := s.db.Create(cert); tx.Error != nil {
 		return nil, gormx.ConvertSQLError(tx.Error)
 	}
 
-	return s.GetCertificate(ctx, projectID, caPoolID, certID)
+	return s.GetCertificate(ctx, projectID, caPoolID, cert.ID)
 }
 
 func (s *sqlStoreImpl) GetCertificate(ctx context.Context, projectID, caPoolID, certID string) (*types.Certificate, error) {
