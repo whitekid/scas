@@ -1,38 +1,37 @@
 package ca
 
 import (
-	"crypto/rand"
+	"context"
 	"crypto/x509"
+	"crypto/x509/pkix"
+	"math/big"
+	"net"
+	"net/url"
+	"time"
 
-	"github.com/pkg/errors"
-
-	"scas/certmanager"
-	"scas/pkg/helper/x509x"
+	"scas/client/common/x509types"
 )
 
-type Local struct {
+type Interface interface {
+	// create certificate and returns as PEM format
+	// if certificate has chain, it returns cert, key, certificate chain
+	CreateCertificate(ctx context.Context, req *CreateRequest) ([]byte, []byte, []byte, error)
 }
 
-func New() *Local {
-	return &Local{}
-}
-
-// CreateCertificate create certificate and returns DER format
-// TODO 일반화면 x509.Certificate로 부터 만들어야 하는데.... 흠.. 좀더 고민이 필요하네..
-func (loc *Local) CreateCertificate(req *certmanager.CreateRequest, parent *x509.Certificate, publicKey any, parentPrivateKey any) ([]byte, error) {
-	template, err := req.Template()
-	if err != nil {
-		return nil, errors.Wrap(err, "fail to create certificate")
-	}
-
-	if parent == nil {
-		parent = template
-	}
-
-	cert, err := x509.CreateCertificate(rand.Reader, template, parent, publicKey, parentPrivateKey)
-	if err != nil {
-		return nil, errors.Wrap(err, "fail to create certificate")
-	}
-
-	return x509x.EncodeCertificateToPEM(cert), nil
+// CreateRequest certificate create request
+type CreateRequest struct {
+	SerialNumber    *big.Int
+	KeyAlgorithm    x509types.SignatureAlgorithm
+	Subject         pkix.Name
+	Issuer          pkix.Name
+	DNSNames        []string
+	EmailAddresses  []string
+	IPAddresses     []net.IP
+	URIs            []*url.URL
+	NotBefore       time.Time
+	NotAfter        time.Time
+	KeyUsage        x509.KeyUsage
+	ExtKeyUsage     []x509.ExtKeyUsage
+	Extensions      []pkix.Extension
+	ExtraExtensions []pkix.Extension
 }

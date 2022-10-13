@@ -14,7 +14,7 @@ import (
 func newFixture(t *testing.T, dbURL string) *fixture {
 	db := testutils.Must1(gormx.Open(dbURL, &gorm.Config{
 		NamingStrategy: schema.NamingStrategy{
-			TablePrefix: "acme_",
+			TablePrefix: "scas_",
 		},
 	}))
 	require.NoError(t, Migrate(db))

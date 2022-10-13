@@ -9,6 +9,7 @@ import (
 	"github.com/whitekid/goxp/fx"
 	"github.com/whitekid/goxp/log"
 	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
 
 	"scas/certmanager/provider"
 	"scas/certmanager/store/models"
@@ -32,7 +33,11 @@ var _ Interface = (*sqlStoreImpl)(nil)
 
 // NewSQL create new SQL store
 func NewSQL(dburl string) Interface {
-	db, err := gormx.Open(dburl)
+	db, err := gormx.Open(dburl, &gorm.Config{
+		NamingStrategy: schema.NamingStrategy{
+			TablePrefix: "scas_",
+		},
+	})
 	if err != nil {
 		panic(err)
 	}

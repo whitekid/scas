@@ -2,9 +2,12 @@ package store
 
 import (
 	"context"
+	"crypto/x509"
 	"encoding/json"
+	"fmt"
 	"time"
 
+	"github.com/lithammer/shortuuid/v4"
 	"github.com/pkg/errors"
 	"github.com/whitekid/goxp"
 	"github.com/whitekid/goxp/fx"
@@ -19,10 +22,14 @@ import (
 	"scas/client/common/x509types"
 	"scas/pkg/helper"
 	"scas/pkg/helper/gormx"
+	"scas/pkg/helper/x509x"
+	"scas/pkg/simplekv"
 )
 
 type sqlStoreImpl struct {
 	db *gorm.DB
+
+	nonces simplekv.Interface[string, struct{}]
 }
 
 func NewSQLStore(dburl string) Interface {
@@ -39,7 +46,10 @@ func NewSQLStore(dburl string) Interface {
 		panic(err)
 	}
 
-	return &sqlStoreImpl{db: db}
+	return &sqlStoreImpl{
+		db:     db,
+		nonces: simplekv.New[string, struct{}](),
+	}
 }
 
 type Project struct {
@@ -50,6 +60,18 @@ type Project struct {
 	CreatedAt               time.Time
 	CAAIdentities           []string
 	ExternalAccountRequired bool
+
+	// Certificate issuer information
+	CommonName         string
+	Country            string
+	Organization       string
+	OrganizationalUnit string
+	Locality           string
+	Province           string
+	StreetAddress      string
+	PostalCode         string
+	KeyUsage           x509.KeyUsage
+	ExtKeyUsage        []x509.ExtKeyUsage
 }
 
 func (s *sqlStoreImpl) CreateProject(ctx context.Context, proj *Project) (*Project, error) {
@@ -58,7 +80,20 @@ func (s *sqlStoreImpl) CreateProject(ctx context.Context, proj *Project) (*Proje
 	}
 
 	acctRef := &models.Project{
-		Name: proj.Name,
+		Name:                    proj.Name,
+		Website:                 proj.Website,
+		CAAIdentities:           proj.CAAIdentities,
+		ExternalAccountRequired: proj.ExternalAccountRequired,
+		CommonName:              proj.CommonName,
+		Country:                 proj.Country,
+		Organization:            proj.Organization,
+		OrganizationalUnit:      proj.OrganizationalUnit,
+		Locality:                proj.Locality,
+		Province:                proj.Province,
+		StreetAddress:           proj.StreetAddress,
+		PostalCode:              proj.PostalCode,
+		KeyUsage:                x509x.KeyUsageToStr(proj.KeyUsage),
+		ExtKeyUsage:             fx.Map(proj.ExtKeyUsage, func(u x509.ExtKeyUsage) string { return x509x.ExtKeyUsageToStr(u) }),
 	}
 
 	if tx := s.db.WithContext(ctx).Create(acctRef); tx.Error != nil {
@@ -129,6 +164,16 @@ func modelsToProject(proj *models.Project) *Project {
 		CreatedAt:               proj.CreatedAt,
 		CAAIdentities:           proj.CAAIdentities,
 		ExternalAccountRequired: proj.ExternalAccountRequired,
+		CommonName:              proj.CommonName,
+		Country:                 proj.Country,
+		Organization:            proj.Organization,
+		OrganizationalUnit:      proj.OrganizationalUnit,
+		Locality:                proj.Locality,
+		Province:                proj.Province,
+		StreetAddress:           proj.StreetAddress,
+		PostalCode:              proj.PostalCode,
+		KeyUsage:                x509x.StrToKeyUsage(proj.KeyUsage),
+		ExtKeyUsage:             fx.Map(proj.ExtKeyUsage, func(s string) x509.ExtKeyUsage { return x509x.StrToExtKeyUsage(s) }),
 	}
 }
 
@@ -161,17 +206,16 @@ func modelsToTerm(in *models.Term) *Term {
 	}
 }
 
-func (s *sqlStoreImpl) UpdateTerm(ctx context.Context, projID string, term *Term) (*Term, error) {
-	panic("Not Implemented: UpdateTerm()")
+func updateColumn(ctx context.Context, tx *gorm.DB, model interface{}, id string, col string, value interface{}) *gorm.DB {
+	return tx.WithContext(ctx).Model(model).Where("id = ?", id).Update(col, value)
+}
+
+func (s *sqlStoreImpl) UpdateTerm(ctx context.Context, projID string, term *Term) error {
+	return updateColumn(ctx, s.db, models.DummyTerm, term.ID, "content", term.Content).Error
 }
 
 func (s *sqlStoreImpl) ActivateTerm(ctx context.Context, projID string, termID string) error {
-	// FIXME Name이 validate:required여서 dummy로 넣어주고있다.
-	if tx := s.db.Model(&models.Project{Name: "dummy"}).Where("id = ?", projID).Update("term_id", termID); tx.Error != nil {
-		return gormx.ConvertSQLError(tx.Error)
-	}
-
-	return nil
+	return updateColumn(ctx, s.db, models.DummyProject, projID, "term_id", termID).Error
 }
 
 func (s *sqlStoreImpl) GetTerm(ctx context.Context, projID string, termID string) (*Term, error) {
@@ -222,30 +266,26 @@ func (s *sqlStoreImpl) listTerm(ctx context.Context, opts ListTermOpts) ([]*mode
 }
 
 func (s *sqlStoreImpl) CreateNonce(ctx context.Context, projID string) (string, error) {
-	nonce := &models.Nonce{
-		ProjectID: projID,
-		Expire:    time.Now().UTC().Add(nonceTimeout),
+	nonce := shortuuid.New()
+	key := fmt.Sprintf("%s.%s", projID, nonce)
+	log.Debugf("CreateNonce(): proj=%s, nonce=%s, key=%s", projID, nonce, key)
+	if err := s.nonces.Set(ctx, key, struct{}{}, nonceTimeout); err != nil {
+		return "", err
 	}
 
-	if tx := s.db.WithContext(ctx).Create(nonce); tx.Error != nil {
-		return "", gormx.ConvertSQLError(tx.Error)
-	}
-
-	return nonce.ID, nil
+	return nonce, nil
 }
 
 func (s *sqlStoreImpl) ValidNonce(ctx context.Context, projID string, nonce string) bool {
-	var n models.Nonce
-	if tx := s.db.WithContext(ctx).First(&n, "id = ? AND project_id = ?", nonce, projID); tx.Error != nil {
-		return false
+	key := fmt.Sprintf("%s.%s", projID, nonce)
+	_, err := s.nonces.Get(ctx, key)
+	if err != nil {
+		log.Errorf("valid nonce: %v, key=%s", err, key)
 	}
-
-	return n.Expire.After(time.Now().UTC())
+	return err == nil
 }
 
-func (s *sqlStoreImpl) CleanupExpiredNonce(ctx context.Context) error {
-	return s.db.WithContext(ctx).Where("expire < ?", time.Now().UTC()).Delete(&models.Nonce{}).Error
-}
+func (s *sqlStoreImpl) CleanupExpiredNonce(ctx context.Context) error { return s.nonces.Cleanup(ctx) }
 
 func (s *sqlStoreImpl) CreateAccount(ctx context.Context, acct *Account) (*Account, error) {
 	if err := helper.ValidateStruct(acct); err != nil {

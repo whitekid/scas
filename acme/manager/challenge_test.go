@@ -37,7 +37,8 @@ func setupFixture(ctx context.Context, t *testing.T) *Fixture {
 	s := store.NewSQLStore("sqlite://" + dbname + ".db")
 
 	proj, err := s.CreateProject(ctx, &store.Project{
-		Name: "test project",
+		Name:       "test project",
+		CommonName: "charlie.127.0.0.1.sslip.io",
 	})
 	require.NoError(t, err)
 
@@ -56,8 +57,9 @@ func setupFixture(ctx context.Context, t *testing.T) *Fixture {
 			OrderResource: acmeclient.OrderResource{
 				Status:      acmeclient.OrderStatusPending,
 				Identifiers: []common.Identifier{{Type: common.IdentifierDNS, Value: "hello.example.com.127.0.0.1.sslip.io"}},
-				NotBefore:   common.TimestampNow(),
-				NotAfter:    common.TimestampNow(),
+				NotBefore:   common.TimestampNow().Truncate(time.Minute),
+				NotAfter:    common.TimestampNow().Truncate(time.Minute),
+				Expires:     common.TimestampNow().Truncate(time.Minute).Add(orderTimeout),
 			},
 		},
 		ProjectID: proj.ID,

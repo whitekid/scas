@@ -24,6 +24,7 @@ var (
 	ServerExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
 )
 
+// SignatureAlgorithm CA에서 지원하는 signature algorithm. 도든 x509.SignatureAlgorithm을 지원하지 않는다
 type SignatureAlgorithm int
 
 const (

@@ -289,7 +289,7 @@ func (app *v1Alpha1API) createCA(c echo.Context) error {
 
 	log.Debugf("createCA: req=%+v", req)
 	creq := &certmanager.CreateRequest{
-		CommonName:         req.CN,
+		CommonName:         req.CommonName,
 		Hosts:              req.Hosts,
 		Country:            req.Country,
 		Organization:       req.Organization,
@@ -348,7 +348,7 @@ func caToResource(ca *types.CertificateAuthority) (*v1alpha1.CertificateRequest,
 	return &v1alpha1.CertificateRequest{
 		ID:                 ca.ID,
 		CAID:               fx.TernaryCF(ca.CAID == nil, func() string { return "" }, func() string { return *ca.CAID }),
-		CN:                 req.CommonName,
+		CommonName:         req.CommonName,
 		Country:            req.Country,
 		Province:           req.Province,
 		Locality:           req.Locality,
@@ -387,7 +387,8 @@ func (app *v1Alpha1API) createCertificate(c echo.Context) error {
 	cc := c.(*Context)
 
 	creq := &certmanager.CreateRequest{
-		CommonName:         req.CN,
+		SerialNumber:       req.SerialNumber,
+		CommonName:         req.CommonName,
 		Hosts:              req.Hosts,
 		Country:            req.Country,
 		Organization:       req.Organization,

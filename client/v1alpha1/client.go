@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/x509"
 	"io"
+	"math/big"
 	"net/http"
 	"time"
 
@@ -127,7 +128,8 @@ type CertificateRequest struct {
 	ID   string `json:",omitempty"`
 	CAID string `json:",omitempty"` // CA ID
 
-	CN string `json:",omitempty" validate:"required"` // Common Name
+	SerialNumber *big.Int `json:",omitempty"`
+	CommonName   string   `json:",omitempty" validate:"required"` // Common Name
 
 	// Names; some part of pkix.Name
 	Country            string `json:",omitempty"`

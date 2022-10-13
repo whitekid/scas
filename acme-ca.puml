@@ -1,0 +1,75 @@
+@startuml acme & ca
+skinparam handwritten false
+participant Client
+participant ACME
+participant "Local CA" as LocalCA
+participant "Remote CA" as RemoteCA
+
+alt use remote ca
+  Client -> RemoteCA: create project
+  Client -> RemoteCA: create ca pool
+  Client -> RemoteCA: create ca
+  Client -> RemoteCA: create root certificate authority
+  Client -> RemoteCA: create subordinate certificate authority
+end
+
+Client -> ACME: create project
+  note right
+    * issuer subject
+    * ca local or remote
+      - remote: project, capool, ca
+  end note
+return
+
+Client -> ACME: create order
+    note right
+        * identifier: common name
+        * not before
+        * not after
+    end note
+return
+
+... identification challenge ...
+
+Client -> ACME: finalize order
+    note right
+      * signature algorithm: request
+      * serial number: request
+      * issuer: project
+      * subject: request
+      * dns names: request
+      * ip addresses: request
+      * email addresses: request
+      * not before/ not after: order
+      * keyUsage/ extKeyUsage: project
+      * extensions/ extra extensions: project
+      * IsCA: project
+      * CRL: project
+    end note
+
+alt local CA
+    ACME -> LocalCA: create certificate
+    note right
+      * issuer: from project
+    end note
+    LocalCA -> LocalCA: create \nself-signed \ncertificate
+    note right
+      * IsCA = false
+    end note
+    LocalCA --> ACME: return certificate
+else remote CA
+    ACME -> RemoteCA: create leaf certificate
+    note right
+      * ca project_id: project
+      * capool_id: project
+      * ca_id: project
+      * isCA: false
+    end note
+    return certificate
+end
+ACME --> Client
+
+Client -> ACME: get certificate
+return
+
+@enduml

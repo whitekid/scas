@@ -31,6 +31,18 @@ type Project struct {
 	Website      string    `json:"website"`
 	ACMEEndpoint string    `json:"acme_endpoint"` // ACME endpoint url
 	CreatedAt    time.Time `json:"created_at"`
+
+	// Issuer subject
+	CommonName         string `validate:"required"`
+	Country            string
+	Organization       string
+	OrganizationalUnit string
+	Locality           string
+	Province           string
+	StreetAddress      string
+	PostalCode         string
+	KeyUsage           string
+	ExtKeyUsage        []string
 }
 
 func (p *ProjectService) Create(ctx context.Context, req *Project) (*Project, error) {

@@ -2,13 +2,13 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/whitekid/goxp"
 
-	"scas/acme/store/models"
 	acmeclient "scas/client/acme"
 	"scas/client/common"
 	"scas/pkg/helper/gormx"
@@ -26,7 +26,10 @@ type testSQL struct {
 func newFixture(ctx context.Context, t *testing.T, dbURL string) *testSQL {
 	s := NewSQLStore(dbURL).(*sqlStoreImpl)
 
-	proj := testutils.Must1(s.CreateProject(ctx, &Project{Name: "test project"}))
+	proj := testutils.Must1(s.CreateProject(ctx, &Project{
+		Name:       "test project",
+		CommonName: "charlie.127.0.0.1.sslip.io",
+	}))
 
 	acct := testutils.Must1(s.CreateAccount(ctx, &Account{
 		AccountResource: acmeclient.AccountResource{
@@ -42,8 +45,9 @@ func newFixture(ctx context.Context, t *testing.T, dbURL string) *testSQL {
 			OrderResource: acmeclient.OrderResource{
 				Status:      acmeclient.OrderStatusPending,
 				Identifiers: []common.Identifier{{Type: common.IdentifierDNS, Value: "server1.acme.127.0.0.1.sslip.io"}},
-				NotAfter:    common.TimestampNow().AddDate(1, 0, 0),
-				NotBefore:   common.TimestampNow().AddDate(0, 1, 0),
+				NotAfter:    common.TimestampNow().Truncate(time.Minute).AddDate(1, 0, 0),
+				NotBefore:   common.TimestampNow().Truncate(time.Minute).AddDate(0, 1, 0),
+				Expires:     common.TimestampNow().Truncate(time.Minute).Add(30 * time.Minute),
 			},
 		},
 		AccountID: acct.ID,
@@ -105,18 +109,12 @@ func TestNonce(t *testing.T) {
 		require.NoError(t, err)
 
 		// expire nonce
-		require.NoError(t, s.db.Model(&models.Nonce{
-			ID:        nonce2,
-			ProjectID: s.proj.ID,
-			Expire:    time.Now().Add(30 * time.Minute),
-		}).Update("expire", time.Now().UTC().Add(-time.Hour)).Error)
+		s.nonces.Expire(ctx, fmt.Sprintf("%s.%s", s.proj.ID, nonce2))
 		require.False(t, s.ValidNonce(ctx, s.proj.ID, nonce2))
 
 		require.NoError(t, s.CleanupExpiredNonce(ctx))
 
-		var nonceCount int64
-		require.NoError(t, s.db.Model(&models.Nonce{}).Count(&nonceCount).Error)
-		require.Equal(t, int64(1), nonceCount)
+		require.Equal(t, 1, s.nonces.Len())
 
 		require.True(t, s.ValidNonce(ctx, s.proj.ID, nonce))
 		require.False(t, s.ValidNonce(ctx, s.proj.ID, nonce2))
@@ -158,8 +156,8 @@ func testOrder(t *testing.T, dbURL string, resetFixture func()) {
 				Status:      acmeclient.OrderStatusPending,
 				Expires:     common.TimestampNow().Add(time.Minute * 30),
 				Identifiers: []common.Identifier{{Type: common.IdentifierDNS, Value: "test.charlie.127.0.0.1.sslip.io"}},
-				NotAfter:    common.TimestampNow().AddDate(0, 1, 0),
-				NotBefore:   common.TimestampNow().AddDate(0, 1, 0),
+				NotAfter:    common.TimestampNow().Truncate(time.Minute).AddDate(0, 1, 0),
+				NotBefore:   common.TimestampNow().Truncate(time.Minute).AddDate(0, 1, 0),
 			},
 		},
 		ProjectID: s.proj.ID,

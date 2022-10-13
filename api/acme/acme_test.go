@@ -60,7 +60,10 @@ func TestScenario(t *testing.T) {
 	ts := newTestServer(ctx, t)
 
 	client := acmeclient.NewClient(ts.URL, nil)
-	proj := testutils.Must1(client.Projects("").Create(ctx, &acmeclient.Project{Name: "test"}))
+	proj := testutils.Must1(client.Projects("").Create(ctx, &acmeclient.Project{
+		Name:       "test",
+		CommonName: "charlei.127.0.0.1.sslip.io",
+	}))
 	acme := testutils.Must1(client.ACME(proj.ACMEEndpoint, nil))
 
 	log.Debugf("request new account....")
@@ -155,7 +158,10 @@ func setupFixture(ctx context.Context, t *testing.T) *fixture {
 	server := newTestServer(ctx, t)
 
 	client := acmeclient.NewClient(server.URL, nil)
-	proj := testutils.Must1(client.Projects("").Create(ctx, &acmeclient.Project{Name: "test"}))
+	proj := testutils.Must1(client.Projects("").Create(ctx, &acmeclient.Project{
+		Name:       "test",
+		CommonName: "charlie.127.0.0.1.sslip.io",
+	}))
 	acme := testutils.Must1(acmeclient.New(proj.ACMEEndpoint, priv))
 
 	acct := testutils.Must1(acme.NewAccount(ctx, &acmeclient.AccountRequest{Contact: []string{"mailto:hello@example.com"}}))
@@ -187,7 +193,10 @@ func setupFixture(ctx context.Context, t *testing.T) *fixture {
 func newFixture(t *testing.T, ctx context.Context) *Fixture {
 	server := newTestServer(ctx, t)
 	client := acmeclient.NewClient(server.URL, nil)
-	proj := testutils.Must1(client.Projects("").Create(ctx, &acmeclient.Project{Name: "test project"}))
+	proj := testutils.Must1(client.Projects("").Create(ctx, &acmeclient.Project{
+		Name:       "test project",
+		CommonName: "charlie.127.0.0.1.sslip.io"},
+	))
 
 	priv := generateKey(t)
 	acme := testutils.Must1(client.ACME(proj.ACMEEndpoint, priv))

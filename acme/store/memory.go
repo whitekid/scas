@@ -58,7 +58,7 @@ func (store *memoryStoreImpl) CreateTerm(ctx context.Context, projID string, ter
 	panic("Not Implemented: CreateTerm()")
 }
 
-func (store *memoryStoreImpl) UpdateTerm(ctx context.Context, projID string, term *Term) (*Term, error) {
+func (store *memoryStoreImpl) UpdateTerm(ctx context.Context, projID string, term *Term) error {
 	panic("Not Implemented: UpdateTerm()")
 }
 

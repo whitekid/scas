@@ -2,9 +2,10 @@ package manager
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/base64"
+	"math/big"
 	"time"
 
 	"github.com/pkg/errors"
@@ -12,10 +13,10 @@ import (
 	"github.com/whitekid/goxp/fx"
 	"github.com/whitekid/goxp/log"
 
+	"scas/acme/ca"
 	"scas/acme/store"
 	acmeclient "scas/client/acme"
 	"scas/client/common"
-	"scas/pkg/helper/x509x"
 )
 
 const (
@@ -35,7 +36,7 @@ func (m *Manager) NewOrder(ctx context.Context, projID string, acctID string, id
 		Order: &acmeclient.Order{
 			OrderResource: acmeclient.OrderResource{
 				Status:      acmeclient.OrderStatusPending,
-				Expires:     common.TimestampNow().Add(orderTimeout), // TODO check order expires periodically
+				Expires:     common.TimestampNow().Add(orderTimeout),
 				Identifiers: identifiers,
 				NotBefore:   notBefore,
 				NotAfter:    notAfter,
@@ -88,6 +89,10 @@ func (m *Manager) FinalizeOrder(ctx context.Context, orderID string, csr *x509.C
 		return nil, err
 	}
 
+	if order.Expires.Before(time.Now().UTC()) {
+		return nil, store.ErrOrderExpired
+	}
+
 	if order.Status != acmeclient.OrderStatusReady {
 		return nil, store.ErrOrderNotReady
 	}
@@ -104,45 +109,62 @@ func (m *Manager) FinalizeOrder(ctx context.Context, orderID string, csr *x509.C
 		}
 	}
 
+	// check if csr information has same information to order
+	// CSR은 order의 정보와 같아아함
 	if len(fx.Filter(order.Identifiers, func(x common.Identifier) bool {
 		return x.Type == common.IdentifierDNS && (x.Value == csr.Subject.CommonName || fx.Contains(csr.DNSNames, x.Value))
 	})) == 0 {
-		order.Status = acmeclient.OrderStatusReady
+		log.Debugf("bad csr: idetifier: %v, csr.DNSNames=%v", order.Identifiers, csr.DNSNames)
 		return nil, store.ErrBadCSR
 	}
 
-	// TODO generate key with CA 현재는 self-signed임...
-	// 조금 복잡하군... CA라면 parent CA등과 연계가 필요하고... local CA도 마찬가지인데..
-	// 이건 project, acme pool 등과 연계가 되어야할 것 같음...
-	privateKey, err := x509x.GenerateKey(csr.SignatureAlgorithm)
-	if err != nil {
-		return nil, errors.Wrapf(err, "key generate failed")
-	}
-	parentPrivateKey := privateKey
+	// TODO If the account is not authorized for the identifiers indicated in the CSR
+	// TODO If the CSR requests extensions that the CA is not willing to include
 
-	template := &x509.Certificate{
-		SerialNumber:    x509x.RandomSerial(),
-		Subject:         csr.Subject,
-		Extensions:      csr.Extensions,
-		ExtraExtensions: csr.ExtraExtensions,
-		DNSNames:        csr.DNSNames,
-		EmailAddresses:  csr.EmailAddresses,
-		IPAddresses:     csr.IPAddresses,
-		URIs:            csr.URIs,
-		NotBefore:       order.NotBefore.Time,
-		NotAfter:        order.NotAfter.Time,
-	}
-	parent := template
-	cert, err := x509.CreateCertificate(rand.Reader, template, parent, privateKey.Public(), parentPrivateKey)
-	if err != nil {
-		return nil, errors.Wrap(err, "certificate create failed")
+	serial, ok := big.NewInt(0).SetString(csr.Subject.SerialNumber, 10)
+	if !ok {
+		log.Errorf("bad csr: invalid serial: serial=%s", csr.Subject.SerialNumber)
+		return nil, store.ErrBadCSR
 	}
 
-	// TODO with chain
+	proj, err := m.store.GetProject(ctx, order.ProjectID)
+	if err != nil {
+		return nil, errors.Wrapf(err, "fail to finalize certificate")
+	}
+
+	caGen := ca.NewLocal()
+	// TODO private key를 어디선가 써야하겠지?
+	certPEM, _, chainPEM, err := caGen.CreateCertificate(ctx, &ca.CreateRequest{
+		SerialNumber: serial,
+		Subject:      csr.Subject,
+		Issuer: pkix.Name{
+			CommonName:         proj.CommonName,
+			Country:            []string{proj.Country},
+			Organization:       []string{proj.Organization},
+			OrganizationalUnit: []string{proj.OrganizationalUnit},
+			Locality:           []string{proj.Locality},
+			Province:           []string{proj.Province},
+			StreetAddress:      []string{proj.StreetAddress},
+			PostalCode:         []string{proj.PostalCode},
+		},
+		DNSNames:       csr.DNSNames,
+		EmailAddresses: csr.EmailAddresses,
+		IPAddresses:    csr.IPAddresses,
+		URIs:           csr.URIs,
+		NotBefore:      order.NotBefore.Time,
+		NotAfter:       order.NotAfter.Time,
+		KeyUsage:       proj.KeyUsage,
+		ExtKeyUsage:    proj.ExtKeyUsage,
+	})
+	if err != nil {
+		return nil, errors.Wrapf(err, "fail to create certificate")
+	}
+
+	log.Debugf("@@@@ cert: %s", certPEM)
 	_, err = m.store.CreateCertificate(ctx, &store.Certificate{
 		ProjectID: order.ProjectID,
 		OrderID:   order.ID,
-		Chain:     x509x.EncodeCertificateToPEM(cert),
+		Chain:     append(certPEM, chainPEM...),
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "certificate create failed")
