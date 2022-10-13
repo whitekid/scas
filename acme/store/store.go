@@ -15,7 +15,7 @@ type Interface interface {
 
 	CreateTerm(ctx context.Context, projID string, term *Term) (*Term, error)
 	GetTerm(ctx context.Context, projID string, termID string) (*Term, error)
-	UpdateTerm(ctx context.Context, projID string, term *Term) (*Term, error)
+	UpdateTerm(ctx context.Context, projID string, term *Term) error
 	ActivateTerm(ctx context.Context, projID string, termID string) error
 
 	CreateNonce(ctx context.Context, projID string) (string, error) // create new nonce

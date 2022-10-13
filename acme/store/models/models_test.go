@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm/schema"
 
 	acmeclient "scas/client/acme"
+	"scas/client/common"
 	"scas/pkg/helper"
 	"scas/pkg/helper/gormx"
 	"scas/pkg/testutils"
@@ -24,7 +25,8 @@ func newFixture(t *testing.T, dbURL string) *fixture {
 	testutils.Must(Migrate(db))
 
 	proj := &Project{
-		Name: "test project",
+		Name:       "test project",
+		CommonName: "charlie.127.0.0.1.sslip.io",
 	}
 	require.NoError(t, db.Create(proj).Error)
 
@@ -39,8 +41,8 @@ func newFixture(t *testing.T, dbURL string) *fixture {
 	order := &Order{
 		AccountID:   acct.ID,
 		Status:      acmeclient.OrderStatusValid.String(),
-		NotBefore:   helper.NowP(),
-		NotAfter:    helper.NowP(),
+		NotBefore:   &common.TimestampNow().Truncate(time.Minute).Time,
+		NotAfter:    &common.TimestampNow().Truncate(time.Minute).Time,
 		Identifiers: Identifier{Idents: []Ident{{Type: "dns", Value: "server1.charlie.127.0.0.1.sslip.io"}}},
 		ProjectID:   proj.ID,
 	}
@@ -74,24 +76,13 @@ type fixture struct {
 	authz *Authz
 }
 
-func TestNonce(t *testing.T) {
-	testutils.ForEachSQLDriver(t, func(t *testing.T, dbURL string, reset func()) {
-		fixture := newFixture(t, dbURL)
-
-		nonce := &Nonce{ProjectID: fixture.proj.ID, Expire: time.Now().Add(30 * time.Minute)}
-		require.NoError(t, fixture.Create(nonce).Error)
-
-		var got Nonce
-		require.NoError(t, fixture.First(&got, "id = ?", nonce.ID).Error)
-	})
-}
-
 func TestProject(t *testing.T) {
 	testutils.ForEachSQLDriver(t, func(t *testing.T, dbURL string, reset func()) {
 		fixture := newFixture(t, dbURL)
 
 		proj := &Project{
-			Name: "test",
+			Name:       "test",
+			CommonName: "charlie.127.0.0.1.sslip.io",
 		}
 		require.NoError(t, fixture.Create(proj).Error)
 
@@ -107,7 +98,8 @@ func TestTerm(t *testing.T) {
 		term := &Term{ProjectID: fixture.proj.ID, Content: "term of service"}
 		require.NoError(t, fixture.Create(term).Error)
 
-		tx := fixture.Model(&Project{Name: "dummy"}).Where("id = ?", fixture.proj.ID).Update("term_id", term.ID)
+		// FIXME Name, CommonName이 required여서 임시로 넣어줬음. 맘에 안드네.
+		tx := fixture.Model(DummyProject).Where("id = ?", fixture.proj.ID).Update("term_id", term.ID)
 		require.NoError(t, tx.Error)
 		require.Equal(t, int64(1), tx.RowsAffected)
 	})

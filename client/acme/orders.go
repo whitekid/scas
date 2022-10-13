@@ -41,7 +41,7 @@ import (
 //		}
 type OrderResource struct {
 	Status      OrderStatus           `json:"status" validate:"required"`
-	Expires     *common.Timestamp     `json:"expires,omitempty"` // required for status pending, valid
+	Expires     *common.Timestamp     `json:"expires,omitempty" validate:"required"` // required for status pending, valid
 	Identifiers []common.Identifier   `json:"identifiers" validate:"required,dive"`
 	NotBefore   *common.Timestamp     `json:"notBefore.omitempty"`
 	NotAfter    *common.Timestamp     `json:"notAfter.omitempty"`

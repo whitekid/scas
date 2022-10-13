@@ -161,7 +161,7 @@ func certInfo(ctx context.Context, filename string) error {
 
 			SerialNumber          string `json:",omitempty"`
 			SubjectKeyId          []byte `json:",omitempty"`
-			KeyUsage              []string
+			KeyUsage              string
 			ExtKeyUsage           []string
 			CRLDistributionPoints string `json:",omitempty"`
 
@@ -189,7 +189,7 @@ func certInfo(ctx context.Context, filename string) error {
 			SerialNumber:          cert.SerialNumber.String(),
 			SubjectKeyId:          cert.SubjectKeyId,
 			KeyUsage:              x509x.KeyUsageToStr(cert.KeyUsage),
-			ExtKeyUsage:           x509x.ExtKeyUsageToStr(cert.ExtKeyUsage),
+			ExtKeyUsage:           fx.Map(cert.ExtKeyUsage, func(u x509.ExtKeyUsage) string { return x509x.ExtKeyUsageToStr(u) }),
 			CRLDistributionPoints: strings.Join(cert.CRLDistributionPoints, ", "),
 			NotAfter:              cert.NotAfter,
 			NotBefore:             cert.NotBefore,

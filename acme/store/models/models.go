@@ -11,12 +11,15 @@ import (
 )
 
 func Migrate(db *gorm.DB) error {
-	if err := db.AutoMigrate(&Project{}, &Term{}, &Nonce{}, &Account{}, &Order{}, &Authz{}, &Challenge{}, &Certificate{}); err != nil {
+	if err := db.AutoMigrate(&Project{}, &Term{}, &Account{}, &Order{}, &Authz{}, &Challenge{}, &Certificate{}); err != nil {
 		return err
 	}
 
 	return nil
 }
+
+// FIXME Name이 validate:required여서 &Project{}로 Update, Select할 때 오류가 난다. 그래서 dummy로 넣어주고있다.
+var DummyProject = &Project{Name: "dummpy", CommonName: "dummy"}
 
 type Project struct {
 	gorm.Model
@@ -31,8 +34,18 @@ type Project struct {
 	CAAIdentities           Strings `gorm:"size:255"` // rfc6844 Certification Authority Authorization(CAA)
 	ExternalAccountRequired bool
 
+	CommonName         string  `gorm:"size:255" validate:"required"`
+	Country            string  `gorm:"size:255"`
+	Organization       string  `gorm:"size:255"`
+	OrganizationalUnit string  `gorm:"size:255"`
+	Locality           string  `gorm:"size:255"`
+	Province           string  `gorm:"size:255"`
+	StreetAddress      string  `gorm:"size:255"`
+	PostalCode         string  `gorm:"size:255"`
+	KeyUsage           string  `gorm:"size:255"`
+	ExtKeyUsage        Strings `gorm:"size:255"`
+
 	Terms        []*Term        `gorm:"foreignKey:ProjectID"`
-	Nonces       []*Nonce       `gorm:"foreignKey:ProjectID"`
 	Accounts     []*Account     `gorm:"foreignKey:ProjectID"`
 	Orders       []*Order       `gorm:"foreignKey:ProjectID"`
 	Authzs       []*Authz       `gorm:"foreignKey:ProjectID"`
@@ -55,21 +68,13 @@ type Term struct {
 	Content   string `gorm:"type:text;not null;check:content<>''" validate:"required"`
 }
 
+var DummyTerm = &Term{ProjectID: "dummy"}
+
 func (t *Term) BeforeCreate(tx *gorm.DB) error {
 	gormx.GenerateID(&t.ID)
 
 	return nil
 }
-
-type Nonce struct {
-	gorm.Model
-
-	ProjectID string    `gorm:"not null;size:22;uniqueIndex:idx_nonce_proj_id;check:project_id<>''" validate:"required"`
-	ID        string    `gorm:"primaryKey;size:22;uniqueIndex:idx_nonce_proj_id;check:id <> ''"`
-	Expire    time.Time `gorm:"not null" validate:"required"`
-}
-
-func (n *Nonce) BeforeCreate(tx *gorm.DB) error { return gormx.GenerateID(&n.ID) }
 
 type Account struct {
 	gorm.Model

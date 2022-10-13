@@ -11,17 +11,27 @@ import (
 	"github.com/whitekid/goxp/fx"
 )
 
-func ForEachSQLDriver(t *testing.T, testfn func(t *testing.T, dbURL string, reset func())) {
-	fx.ForEach([]string{"sqlite", "mysql", "pgsql"}, func(_ int, driver string) { forOneDriver(t, driver, testfn) })
+func DBName(name string) string {
+	return strings.ToLower(strings.NewReplacer(
+		"/", "_",
+		":", "_",
+		"#", "_",
+	).Replace(name))
 }
 
-func forOneDriver(t *testing.T, driver string, testfn func(t *testing.T, dbURL string, reset func())) {
-	t.Run(driver, func(t *testing.T) {
+func ForEachSQLDriver(t *testing.T, testfn func(t *testing.T, dbURL string, reset func())) {
+	fx.ForEach([]string{"sqlite", "mysql", "pgsql"}, func(_ int, driver string) {
 		if os.Getenv("SCAS_SKIP_SQL_"+strings.ToUpper(driver)) == "true" {
 			t.Skip("skip driver " + driver)
 			return
 		}
 
+		ForOneSQLDriver(t, driver, testfn)
+	})
+}
+
+func ForOneSQLDriver(t *testing.T, driver string, testfn func(t *testing.T, dbURL string, reset func())) {
+	t.Run(driver, func(t *testing.T) {
 		dbname := DBName(t.Name())
 		dburl := ""
 		var db *sql.DB

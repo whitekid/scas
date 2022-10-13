@@ -50,7 +50,7 @@ func newTestServerWithFixture(ctx context.Context, t *testing.T) (*httptest.Serv
 		KeyUsage:     x509types.RootCAKeyUsage,
 		ExtKeyUsage:  x509types.RootCAExtKeyUsage,
 		NotAfter:     helper.AfterNow(5, 0, 0),
-		NotBefore:    helper.AfterNow(0, -0, 0),
+		NotBefore:    helper.AfterNow(0, -1, 0),
 		IsCA:         true,
 	}, ""))
 	subCA := testutils.Must1(repo.CreateCertificateAuthority(ctx, project.ID, caPool.ID, &certmanager.CreateRequest{
@@ -114,10 +114,10 @@ func TestScenario(t *testing.T) {
 	// create root CA
 	poolSvc := projectSvc.Pools(caPool.ID)
 	rootCAReq := &CertificateRequest{
-		CN:                 caPool.ID + " ROOT CA 1",
+		CommonName:         caPool.ID + " ROOT CA 1",
+		Country:            "country",
 		Organization:       "example.com org",
 		OrganizationalUnit: "example.com org unit",
-		Country:            "country",
 		StreetAddress:      "street",
 		Locality:           "locality",
 		Province:           "province",
@@ -140,7 +140,7 @@ func TestScenario(t *testing.T) {
 
 	// create subordinate ca, with parent
 	subCAReq := &CertificateRequest{
-		CN:           testCAPoolName + " CA",
+		CommonName:   testCAPoolName + " CA",
 		KeyAlgorithm: x509types.ECDSA_P256,
 		KeyUsage:     x509types.SubCAKeyUsage,
 		ExtKeyUsage:  x509types.SubCAExtKeyUsage,
@@ -158,7 +158,7 @@ func TestScenario(t *testing.T) {
 
 	// create server certificate
 	newCert, err := poolSvc.Certificates().Create(ctx, &CertificateRequest{
-		CN:           testServerCN,
+		CommonName:   testServerCN,
 		Hosts:        []string{testServerCN},
 		KeyAlgorithm: x509types.RSA_2048,
 		KeyUsage:     x509types.ServerKeyUsage,
@@ -184,7 +184,7 @@ func TestScenario(t *testing.T) {
 
 	// create new certificate for revoke
 	revokedCertReq := &CertificateRequest{
-		CN:           testRevokedServerCN,
+		CommonName:   testRevokedServerCN,
 		Hosts:        []string{testRevokedServerCN},
 		KeyAlgorithm: x509types.RSA_2048,
 		NotAfter:     helper.AfterNow(1, 0, 0),
@@ -222,8 +222,8 @@ func Test_v1Alpha1API_createCA(t *testing.T) {
 		wantErr bool
 	}{
 		{"empty request", args{&CertificateRequest{}}, true},
-		{"valid: cn", args{&CertificateRequest{CN: "cn", KeyAlgorithm: x509types.ECDSA_P256, NotBefore: notBefore, NotAfter: notAfter}}, false},
-		{"valid: crl", args{&CertificateRequest{CN: "cn", CRL: ts.URL, KeyAlgorithm: x509types.ECDSA_P256, NotBefore: notBefore, NotAfter: notAfter}}, false},
+		{"valid: cn", args{&CertificateRequest{CommonName: "cn", KeyAlgorithm: x509types.ECDSA_P256, NotBefore: notBefore, NotAfter: notAfter}}, false},
+		{"valid: crl", args{&CertificateRequest{CommonName: "cn", CRL: ts.URL, KeyAlgorithm: x509types.ECDSA_P256, NotBefore: notBefore, NotAfter: notAfter}}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

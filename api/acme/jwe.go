@@ -17,7 +17,7 @@ func (s *ACMEServer) parseJOSERequest(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) (err error) {
 		req := &acmeclient.JOSERequest{}
 
-		if err := c.Bind(req); err != nil {
+		if err := helper.Bind(c, req); err != nil {
 			return err
 		}
 

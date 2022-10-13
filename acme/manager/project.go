@@ -9,8 +9,8 @@ import (
 	acmeclient "scas/client/acme"
 )
 
-func (m *Manager) CreateProject(ctx context.Context, name string) (*store.Project, error) {
-	return m.store.CreateProject(ctx, &store.Project{Name: name})
+func (m *Manager) CreateProject(ctx context.Context, proj *store.Project) (*store.Project, error) {
+	return m.store.CreateProject(ctx, proj)
 }
 
 func (m *Manager) GetProject(ctx context.Context, projID string) (*store.Project, error) {
@@ -42,18 +42,23 @@ func (m *Manager) UpdateTerm(ctx context.Context, projID string, in *acmeclient.
 	}
 
 	term.Content = in.Content
-	updated, err := m.store.UpdateTerm(ctx, projID, term)
+	err = m.store.UpdateTerm(ctx, projID, term)
 	if err != nil {
 		return nil, err
 	}
 
 	if in.Active {
-		if err := m.updateActiveTerm(ctx, projID, updated.ID); err != nil {
+		if err := m.updateActiveTerm(ctx, projID, term.ID); err != nil {
 			return nil, errors.Wrapf(err, "fail to update active term")
 		}
 	}
 
-	return updated, nil
+	term, err = m.store.GetTerm(ctx, projID, in.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return term, nil
 }
 
 func (m *Manager) updateActiveTerm(ctx context.Context, projID string, termID string) error {

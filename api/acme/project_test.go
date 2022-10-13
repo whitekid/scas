@@ -20,7 +20,7 @@ func TestProject(t *testing.T) {
 		args    args
 		wantErr bool
 	}{
-		{`valid`, args{&acmeclient.Project{Name: "test"}}, false},
+		{`valid`, args{&acmeclient.Project{Name: "test", CommonName: "charlie.127.0.0.1.sslip.io"}}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -24,6 +24,7 @@ var (
 	ErrAuthzNotReady         = errors.New("invalid authorization status")
 	ErrAuthzNotFound         = NewACMEError(http.StatusNotFound, `unknown`, `authz not found`)
 	ErrAuthzExpired          = NewACMEError(http.StatusForbidden, `unknown`, `authorization expired`)
+	ErrOrderExpired          = NewACMEError(http.StatusForbidden, `unknown`, `order expired`)
 )
 
 var (

@@ -48,7 +48,6 @@ const (
 )
 
 func newSQL(ctx context.Context, t *testing.T, dburl string) *testSQL {
-	log.Debugf("@@@@@ Name: %s", t.Name())
 	s := testSQL{sqlStoreImpl: NewSQL(dburl).(*sqlStoreImpl)}
 
 	project := testutils.Must1(s.createProject(ctx, testProjectName))

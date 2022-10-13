@@ -63,7 +63,6 @@ func TestGetCert(t *testing.T) {
 			require.NotEmpty(t, cert)
 		})
 	}
-
 }
 
 func TestCertRevocation(t *testing.T) {

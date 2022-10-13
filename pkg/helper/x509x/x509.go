@@ -55,10 +55,10 @@ func ParseCertificate(certBytes []byte) (*x509.Certificate, error) {
 	return x509.ParseCertificate(certBytes)
 }
 
-func ParseCertificateChain(derBytes []byte) ([]*x509.Certificate, error) {
+func ParseCertificateChain(pemBytes []byte) ([]*x509.Certificate, error) {
 	certs := make([]*x509.Certificate, 0)
 	for {
-		p, rest := pem.Decode(derBytes)
+		p, rest := pem.Decode(pemBytes)
 		if p == nil {
 			return certs, nil
 		}
@@ -68,7 +68,7 @@ func ParseCertificateChain(derBytes []byte) ([]*x509.Certificate, error) {
 			return nil, errors.Wrap(err, "certificate parse failed")
 		}
 		certs = append(certs, cert)
-		derBytes = rest
+		pemBytes = rest
 	}
 }
 
@@ -229,6 +229,8 @@ var (
 		x509.KeyUsageEncipherOnly:      "Encipher Only",
 		x509.KeyUsageDecipherOnly:      "Decipher Only",
 	}
+	strToKeyUsage = make(map[string]x509.KeyUsage, len(keyUsageToStr))
+
 	extKeyUsageToStr = map[x509.ExtKeyUsage]string{
 		x509.ExtKeyUsageAny:                            "UsageA ny",
 		x509.ExtKeyUsageServerAuth:                     "TLS Web Server Authentication",
@@ -245,6 +247,7 @@ var (
 		x509.ExtKeyUsageMicrosoftCommercialCodeSigning: "Microsoft Commercial Code Signing",
 		x509.ExtKeyUsageMicrosoftKernelCodeSigning:     "Microsoft Kernel Code Signing",
 	}
+	strToExtKeyUsage = make(map[string]x509.ExtKeyUsage, len(extKeyUsageToStr))
 
 	keyUsages    []x509.KeyUsage
 	extKeyUsages []x509.ExtKeyUsage
@@ -253,28 +256,17 @@ var (
 func init() {
 	keyUsages = fx.Keys(keyUsageToStr)
 	sort.Slice(keyUsages, func(i, j int) bool { return int(keyUsages[i]) < int(keyUsages[j]) })
+	fx.ForEachMap(keyUsageToStr, func(k x509.KeyUsage, v string) { strToKeyUsage[v] = k })
 
 	extKeyUsages = fx.Keys(extKeyUsageToStr)
 	sort.Slice(extKeyUsages, func(i, j int) bool { return int(extKeyUsages[i]) < int(extKeyUsages[j]) })
+	fx.ForEachMap(extKeyUsageToStr, func(k x509.ExtKeyUsage, v string) { strToExtKeyUsage[v] = k })
 }
 
-// KeyUsageToStr
-func KeyUsageToStr(keyUsage x509.KeyUsage) (usages []string) {
-	for _, u := range keyUsages {
-		if keyUsage&u > 0 {
-			usages = append(usages, keyUsageToStr[u])
-		}
-	}
-	return usages
-}
-
-// ExtKeyUsageToStr
-func ExtKeyUsageToStr(keyUsage []x509.ExtKeyUsage) (usages []string) {
-	for _, u := range keyUsage {
-		usages = append(usages, extKeyUsageToStr[u])
-	}
-	return usages
-}
+func KeyUsageToStr(keyUsage x509.KeyUsage) string       { return keyUsageToStr[keyUsage] }
+func StrToKeyUsage(s string) x509.KeyUsage              { return strToKeyUsage[s] }
+func ExtKeyUsageToStr(keyUsage x509.ExtKeyUsage) string { return extKeyUsageToStr[keyUsage] }
+func StrToExtKeyUsage(s string) x509.ExtKeyUsage        { return strToExtKeyUsage[s] }
 
 func RandomSerial() *big.Int {
 	s, _ := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))

@@ -11,7 +11,7 @@ import (
 type Project struct {
 	gorm.Model
 
-	ID   string `gorm:"primaryKey;size:22;check:id<>''"`
+	ID   string `gorm:"primaryKey;size:22;check:id <> ''"`
 	Name string `gorm:"not null;size:256:check:name<>''" validate:"required"`
 }
 
@@ -25,8 +25,8 @@ type CAPool struct {
 	gorm.Model
 
 	ID        string `gorm:"primaryKey;size:22;check:id<>''"`
-	Name      string `gorm:"not null;uniqueIndex:idx_name;size:256;check:name<>''" validate:"required"`
-	ProjectID string `gorm:"not null;uniqueIndex:idx_name;size:22;check:project_id<>''" validate:"required"`
+	Name      string `gorm:"not null;uniqueIndex:capool_idx_name;size:256;check:name<>''" validate:"required"`
+	ProjectID string `gorm:"not null;uniqueIndex:capool_idx_name;size:22;check:project_id<>''" validate:"required"`
 	Project   *Project
 }
 

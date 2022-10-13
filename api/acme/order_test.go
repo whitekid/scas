@@ -40,17 +40,14 @@ func TestFinalizeOrder(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	type fields struct {
-	}
 	type args struct {
 	}
 	tests := [...]struct {
 		name    string
-		fields  fields
 		args    args
 		wantErr bool
 	}{
-		{`valid`, fields{}, args{}, false},
+		{`valid`, args{}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -61,7 +58,8 @@ func TestFinalizeOrder(t *testing.T) {
 
 			csr := &x509.CertificateRequest{
 				Subject: pkix.Name{
-					CommonName: client.order.Identifiers[0].Value,
+					SerialNumber: x509x.RandomSerial().String(),
+					CommonName:   client.order.Identifiers[0].Value,
 				},
 			}
 			finalizedOrder, err := client.Order(client.order.Finalize).Finalize(ctx, csr)
