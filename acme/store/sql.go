@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/lithammer/shortuuid/v4"
 	"github.com/pkg/errors"
 	"github.com/whitekid/goxp"
 	"github.com/whitekid/goxp/fx"
@@ -63,15 +62,20 @@ type Project struct {
 
 	// Certificate issuer information
 	CommonName         string
-	Country            string
-	Organization       string
-	OrganizationalUnit string
-	Locality           string
-	Province           string
-	StreetAddress      string
-	PostalCode         string
+	Country            []string
+	Organization       []string
+	OrganizationalUnit []string
+	Locality           []string
+	Province           []string
+	StreetAddress      []string
+	PostalCode         []string
 	KeyUsage           x509.KeyUsage
 	ExtKeyUsage        []x509.ExtKeyUsage
+
+	UseRemoteCA       bool   // TODO
+	RemoteCAEndpoint  string // TODO
+	RemoteCAProjectID string // TODO
+	RemoteCAID        string // TODO
 }
 
 func (s *sqlStoreImpl) CreateProject(ctx context.Context, proj *Project) (*Project, error) {
@@ -94,6 +98,10 @@ func (s *sqlStoreImpl) CreateProject(ctx context.Context, proj *Project) (*Proje
 		PostalCode:              proj.PostalCode,
 		KeyUsage:                x509x.KeyUsageToStr(proj.KeyUsage),
 		ExtKeyUsage:             fx.Map(proj.ExtKeyUsage, func(u x509.ExtKeyUsage) string { return x509x.ExtKeyUsageToStr(u) }),
+		UseRemoteCA:             proj.UseRemoteCA,
+		RemoteCAEndpoint:        proj.RemoteCAEndpoint,
+		RemoteCAProjectID:       proj.RemoteCAProjectID,
+		RemoteCAID:              proj.RemoteCAID,
 	}
 
 	if tx := s.db.WithContext(ctx).Create(acctRef); tx.Error != nil {
@@ -174,6 +182,10 @@ func modelsToProject(proj *models.Project) *Project {
 		PostalCode:              proj.PostalCode,
 		KeyUsage:                x509x.StrToKeyUsage(proj.KeyUsage),
 		ExtKeyUsage:             fx.Map(proj.ExtKeyUsage, func(s string) x509.ExtKeyUsage { return x509x.StrToExtKeyUsage(s) }),
+		UseRemoteCA:             proj.UseRemoteCA,
+		RemoteCAEndpoint:        proj.RemoteCAEndpoint,
+		RemoteCAProjectID:       proj.RemoteCAProjectID,
+		RemoteCAID:              proj.RemoteCAID,
 	}
 }
 
@@ -266,7 +278,7 @@ func (s *sqlStoreImpl) listTerm(ctx context.Context, opts ListTermOpts) ([]*mode
 }
 
 func (s *sqlStoreImpl) CreateNonce(ctx context.Context, projID string) (string, error) {
-	nonce := shortuuid.New()
+	nonce := helper.NewID()
 	key := fmt.Sprintf("%s.%s", projID, nonce)
 	log.Debugf("CreateNonce(): proj=%s, nonce=%s, key=%s", projID, nonce, key)
 	if err := s.nonces.Set(ctx, key, struct{}{}, nonceTimeout); err != nil {

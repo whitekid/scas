@@ -7,9 +7,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	acmeclient "scas/client/acme"
+	"scas/pkg/helper"
 )
 
-func TestProject(t *testing.T) {
+func TestProjectCreate(t *testing.T) {
 	priv := generateKey(t)
 
 	type args struct {
@@ -21,6 +22,8 @@ func TestProject(t *testing.T) {
 		wantErr bool
 	}{
 		{`valid`, args{&acmeclient.Project{Name: "test", CommonName: "charlie.127.0.0.1.sslip.io"}}, false},
+		{`remote CA`, args{&acmeclient.Project{Name: "test", CommonName: "charlie.127.0.0.1.sslip.io",
+			UseRemoteCA: true, RemoteCAEndpoint: "http://example.com/xx", RemoteCAProjectID: helper.NewID(), RemoteCAID: helper.NewID()}}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -31,6 +34,13 @@ func TestProject(t *testing.T) {
 
 			proj, err := fixture.client.Projects("").Create(ctx, tt.args.proj)
 			require.Truef(t, (err != nil) == tt.wantErr, `Projects.Create() failed: error = %+v, wantErr = %v`, err, tt.wantErr)
+			require.Equal(t, tt.args.proj.Name, proj.Name)
+			require.Equal(t, tt.args.proj.CommonName, proj.CommonName)
+			require.Equal(t, tt.args.proj.CommonName, proj.CommonName)
+			require.Equal(t, tt.args.proj.UseRemoteCA, proj.UseRemoteCA)
+			require.Equal(t, tt.args.proj.RemoteCAEndpoint, proj.RemoteCAEndpoint)
+			require.Equal(t, tt.args.proj.RemoteCAProjectID, proj.RemoteCAProjectID)
+			require.Equal(t, tt.args.proj.RemoteCAID, proj.RemoteCAID)
 
 			require.NotEmpty(t, proj.ID)
 			require.NotEmpty(t, proj.ACMEEndpoint)

@@ -34,15 +34,21 @@ type Project struct {
 
 	// Issuer subject
 	CommonName         string `validate:"required"`
-	Country            string
-	Organization       string
-	OrganizationalUnit string
-	Locality           string
-	Province           string
-	StreetAddress      string
-	PostalCode         string
+	Country            []string
+	Organization       []string
+	OrganizationalUnit []string
+	Locality           []string
+	Province           []string
+	StreetAddress      []string
+	PostalCode         []string
 	KeyUsage           string
 	ExtKeyUsage        []string
+
+	// CA
+	UseRemoteCA       bool   // if true, generate CA with remote ca
+	RemoteCAEndpoint  string `validate:"required_if=UseRemoteCA true"`
+	RemoteCAProjectID string `validate:"required_if=UseRemoteCA true,printascii"`
+	RemoteCAID        string `validate:"required_if=UseRemoteCA true,printascii"`
 }
 
 func (p *ProjectService) Create(ctx context.Context, req *Project) (*Project, error) {

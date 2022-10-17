@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lithammer/shortuuid/v4"
 	"github.com/whitekid/goxp/fx"
 	"github.com/whitekid/goxp/log"
 
@@ -71,7 +70,7 @@ func (store *memoryStoreImpl) ActivateTerm(ctx context.Context, projID string, t
 }
 
 func (store *memoryStoreImpl) CreateNonce(ctx context.Context, projID string) (string, error) {
-	nonce := shortuuid.New()
+	nonce := helper.NewID()
 
 	store.noncesMU.Lock()
 	defer store.noncesMU.Unlock()
@@ -129,7 +128,7 @@ func (store *memoryStoreImpl) CreateAccount(ctx context.Context, acct *Account) 
 	store.accountsMU.Lock()
 	defer store.accountsMU.Unlock()
 
-	acct.ID = shortuuid.New()
+	acct.ID = helper.NewID()
 	store.accounts[acct.ID] = acct
 
 	return acct, nil
@@ -164,7 +163,7 @@ func (store *memoryStoreImpl) CreateOrder(ctx context.Context, order *Order) (*O
 	store.ordersMU.Lock()
 	defer store.ordersMU.Unlock()
 
-	order.ID = shortuuid.New()
+	order.ID = helper.NewID()
 	store.orders[order.ID] = order
 
 	return order, nil
@@ -204,7 +203,7 @@ func (store *memoryStoreImpl) CreateAuthz(ctx context.Context, authz *Authz) (*A
 	store.authzMU.Lock()
 	defer store.authzMU.Unlock()
 
-	authz.ID = shortuuid.New()
+	authz.ID = helper.NewID()
 	store.authz[authz.ID] = authz
 
 	return authz, nil
@@ -257,7 +256,7 @@ func (store *memoryStoreImpl) CreateCertificate(ctx context.Context, cert *Certi
 	store.certsMU.Lock()
 	defer store.certsMU.Unlock()
 
-	cert.ID = shortuuid.New()
+	cert.ID = helper.NewID()
 	store.certs[cert.ID] = cert
 
 	return cert, nil
@@ -306,7 +305,7 @@ func (store *memoryStoreImpl) CreateChallenge(ctx context.Context, chal *Challen
 	store.challengeMU.Lock()
 	defer store.challengeMU.Unlock()
 
-	chal.ID = shortuuid.New()
+	chal.ID = helper.NewID()
 	store.challenges[chal.ID] = chal
 
 	return chal, nil
