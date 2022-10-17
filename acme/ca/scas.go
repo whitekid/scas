@@ -11,28 +11,26 @@ import (
 	"scas/client/v1alpha1"
 )
 
-func NewSCAS(endpoint string, projectID string, caPoolID, CAID string) Interface {
+func NewSCAS(endpoint string, projectID string, CAID string) Interface {
 	return &scasImpl{
-		client:   v1alpha1.New(endpoint),
-		projID:   projectID,
-		caPoolID: caPoolID,
-		caID:     CAID,
+		client: v1alpha1.New(endpoint),
+		projID: projectID,
+		caID:   CAID,
 	}
 }
 
 type scasImpl struct {
-	client   *v1alpha1.Client // SCAS CA Client
-	projID   string
-	caPoolID string
-	caID     string
+	client *v1alpha1.Client // SCAS CA Client
+	projID string
+	caID   string
 }
 
 var _ Interface = (*scasImpl)(nil)
 
 func (s *scasImpl) CreateCertificate(ctx context.Context, in *CreateRequest) ([]byte, []byte, []byte, error) {
-	log.Debugf("CreateCertificate(): proj=%s, pool=%s, ca=%s, req=%+v", s.projID, s.caPoolID, s.caID, in)
+	log.Debugf("CreateCertificate(): proj=%s, ca=%s, req=%+v", s.projID, s.caID, in)
 
-	cert, err := s.client.Projects(s.projID).Pools(s.caPoolID).Certificates().Create(ctx, &v1alpha1.CertificateRequest{
+	cert, err := s.client.Projects(s.projID).Certificates().Create(ctx, &v1alpha1.CertificateRequest{
 		SerialNumber:       in.SerialNumber,
 		CAID:               s.caID,
 		CommonName:         in.Subject.CommonName,

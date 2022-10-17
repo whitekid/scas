@@ -26,7 +26,6 @@ import (
 
 const (
 	testProjectName = "project #1"
-	testPoolName    = "example.local"
 	testCAName      = "example.local"
 	testCAHosts     = "example.local"
 	testRootCACN    = "example.local Root CA"
@@ -43,11 +42,8 @@ func testRepository(t *testing.T, dbURL string, resetFixture func()) {
 	project, err := repo.CreateProject(ctx, testProjectName)
 	require.NoError(t, err)
 
-	caPool, err := repo.CreateCAPool(ctx, project.ID, testPoolName)
-	require.NoError(t, err)
-
 	// create root ca
-	rootCA, err := repo.CreateCertificateAuthority(ctx, project.ID, caPool.ID, &provider.CreateRequest{
+	rootCA, err := repo.CreateCertificateAuthority(ctx, project.ID, &provider.CreateRequest{
 		CommonName:   testRootCACN,
 		KeyAlgorithm: x509types.ECDSA_P384,
 		IsCA:         true,
@@ -58,7 +54,7 @@ func testRepository(t *testing.T, dbURL string, resetFixture func()) {
 	dumpCA(t, rootCA)
 
 	// create subordinate ca
-	subCA, err := repo.CreateCertificateAuthority(ctx, project.ID, caPool.ID, &provider.CreateRequest{
+	subCA, err := repo.CreateCertificateAuthority(ctx, project.ID, &provider.CreateRequest{
 		CommonName:   testSubCACN,
 		KeyAlgorithm: x509types.ECDSA_P256,
 		IsCA:         true,
@@ -69,7 +65,7 @@ func testRepository(t *testing.T, dbURL string, resetFixture func()) {
 	require.NoError(t, err)
 	dumpCA(t, subCA)
 
-	serverCert, err := repo.CreateCertificate(ctx, project.ID, caPool.ID, &provider.CreateRequest{
+	serverCert, err := repo.CreateCertificate(ctx, project.ID, &provider.CreateRequest{
 		CommonName:   testServerCN,
 		KeyAlgorithm: x509types.RSA_4096,
 		Hosts:        []string{testServerCN}, // server cn is dns name
@@ -82,20 +78,18 @@ func testRepository(t *testing.T, dbURL string, resetFixture func()) {
 	dumpCert(t, serverCert)
 	require.NoError(t, testutils.TestTLSServer(ctx, serverCert.Cert, serverCert.Key, serverCert.Chain, testServerCN, http.StatusOK))
 
-	pools := testutils.Must1(repo.ListCAPool(ctx, project.ID, store.CAPoolListOpt{}))
-
-	renewedCert, err := repo.RenewCertificate(ctx, project.ID, pools[0].ID, serverCert.ID)
+	renewedCert, err := repo.RenewCertificate(ctx, project.ID, serverCert.ID)
 	require.NoError(t, err)
 	require.NotEqual(t, serverCert.ID, renewedCert.ID)
 	require.NotEqual(t, serverCert, renewedCert)
 
-	revokedCert, err := repo.RevokeCertificate(ctx, project.ID, caPool.ID, serverCert.ID, x509types.RevokeUnspecified)
+	revokedCert, err := repo.RevokeCertificate(ctx, project.ID, serverCert.ID, x509types.RevokeUnspecified)
 	require.NoError(t, err)
 	require.Equal(t, common.StatusRevoked, revokedCert.Status)
 	require.False(t, revokedCert.RevokedAt.IsZero())
 	revokedX509Cert := testutils.Must1(x509x.ParseCertificate(revokedCert.Cert))
 
-	crlBytes, err := repo.GetCRL(ctx, project.ID, caPool.ID)
+	crlBytes, err := repo.GetCRL(ctx, project.ID)
 	require.NoError(t, err)
 	revocationList, err := x509.ParseRevocationList(crlBytes)
 	require.NoError(t, err)

@@ -8,7 +8,6 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"math/big"
-	"strings"
 	"sync"
 	"time"
 
@@ -32,19 +31,15 @@ type Interface interface {
 	GetProject(ctx context.Context, projectID string) (*types.Project, error)
 	ListProject(ctx context.Context, opts store.ProjectListOpt) ([]*types.Project, error)
 
-	CreateCAPool(ctx context.Context, projectID string, poolName string) (*types.CAPool, error)
-	GetCAPool(ctx context.Context, projectID, caPoolID string) (*types.CAPool, error)
-	ListCAPool(ctx context.Context, projectID string, opts store.CAPoolListOpt) ([]*types.CAPool, error)
+	CreateCertificateAuthority(ctx context.Context, projectID string, req *provider.CreateRequest, parentCAID string) (*types.CertificateAuthority, error)
+	GetCertificateAuthority(ctx context.Context, projectID string, ID string) (*types.CertificateAuthority, error)
 
-	CreateCertificateAuthority(ctx context.Context, projectID string, poolID string, req *provider.CreateRequest, parentCAID string) (*types.CertificateAuthority, error)
-	GetCertificateAuthority(ctx context.Context, projectID string, poolID string, ID string) (*types.CertificateAuthority, error)
-
-	CreateCertificate(ctx context.Context, projectID string, poolID string, req *provider.CreateRequest, CAID string) (*types.Certificate, error)
-	ListCertificate(ctx context.Context, projectID string, poolID string, opts store.CertificateListOpt) ([]*types.Certificate, error)
-	GetCertificate(ctx context.Context, projectID, poolID, ID string) (*types.Certificate, error)
-	RenewCertificate(ctx context.Context, projectID string, poolID string, certID string) (*types.Certificate, error)
-	RevokeCertificate(ctx context.Context, projectID string, poolID string, certID string, reason x509types.RevokeReason) (*types.Certificate, error)
-	GetCRL(ctx context.Context, projectID string, poolID string) ([]byte, error)
+	CreateCertificate(ctx context.Context, projectID string, req *provider.CreateRequest, CAID string) (*types.Certificate, error)
+	ListCertificate(ctx context.Context, projectID string, opts store.CertificateListOpt) ([]*types.Certificate, error)
+	GetCertificate(ctx context.Context, projectID string, ID string) (*types.Certificate, error)
+	RenewCertificate(ctx context.Context, projectID string, certID string) (*types.Certificate, error)
+	RevokeCertificate(ctx context.Context, projectID string, certID string, reason x509types.RevokeReason) (*types.Certificate, error)
+	GetCRL(ctx context.Context, projectID string) ([]byte, error)
 
 	// caller must close channel to close go routine
 	CRLUpdateChecker() chan<- struct{}
@@ -63,7 +58,7 @@ type repoImpl struct {
 	provider provider.Interface
 	store    store.Interface
 
-	crls  map[string]*crlInfo // project_id/capool_id
+	crls  map[string]*crlInfo // project_id
 	muCRL sync.Mutex
 
 	lastCRLUpdateChecked time.Time
@@ -92,29 +87,13 @@ func (repo *repoImpl) ListProject(ctx context.Context, opts store.ProjectListOpt
 	return repo.store.ListProject(ctx, opts)
 }
 
-func (repo *repoImpl) CreateCAPool(ctx context.Context, projectID string, poolName string) (*types.CAPool, error) {
-	caPool, err := repo.store.CreateCAPool(ctx, projectID, poolName)
-	if err != nil {
-		return nil, errors.Wrap(err, "fail to create CA pool")
-	}
-	return caPool, nil
-}
-
-func (repo *repoImpl) GetCAPool(ctx context.Context, projectID string, caPoolID string) (*types.CAPool, error) {
-	return repo.store.GetCAPool(ctx, projectID, caPoolID)
-}
-
-func (repo *repoImpl) ListCAPool(ctx context.Context, projectID string, opts store.CAPoolListOpt) ([]*types.CAPool, error) {
-	return repo.store.ListCAPool(ctx, projectID, opts)
-}
-
-func (repo *repoImpl) CreateCertificateAuthority(ctx context.Context, projectID string, caPoolID string, req *provider.CreateRequest, parentCAID string) (*types.CertificateAuthority, error) {
-	certPEM, certPrivateKeyPEM, err := repo.createCertificate(ctx, projectID, caPoolID, req, parentCAID)
+func (repo *repoImpl) CreateCertificateAuthority(ctx context.Context, projectID string, req *provider.CreateRequest, parentCAID string) (*types.CertificateAuthority, error) {
+	certPEM, certPrivateKeyPEM, err := repo.createCertificate(ctx, projectID, req, parentCAID)
 	if err != nil {
 		return nil, err
 	}
 
-	ca, err := repo.store.CreateCA(ctx, projectID, caPoolID, req, certPEM, certPrivateKeyPEM, fx.Ternary(parentCAID == "", nil, &parentCAID))
+	ca, err := repo.store.CreateCA(ctx, projectID, req, certPEM, certPrivateKeyPEM, fx.Ternary(parentCAID == "", nil, &parentCAID))
 	if err != nil {
 		return nil, errors.Wrap(err, "fail to create certificate authority")
 	}
@@ -123,7 +102,7 @@ func (repo *repoImpl) CreateCertificateAuthority(ctx context.Context, projectID 
 }
 
 // createCertificate create certificate with provider and returns cert, privateKey, error
-func (repo *repoImpl) createCertificate(ctx context.Context, projectID string, caPoolID string, req *provider.CreateRequest, parentCAID string) ([]byte, []byte, error) {
+func (repo *repoImpl) createCertificate(ctx context.Context, projectID string, req *provider.CreateRequest, parentCAID string) ([]byte, []byte, error) {
 	if err := helper.ValidateStruct(req); err != nil {
 		return nil, nil, errors.Wrap(err, "fail to create certificate")
 	}
@@ -132,7 +111,7 @@ func (repo *repoImpl) createCertificate(ctx context.Context, projectID string, c
 	var parent *x509.Certificate
 	var parentPrivateKey x509x.PrivateKey
 	if parentCAID != "" {
-		ca, err := repo.store.GetCA(ctx, projectID, caPoolID, parentCAID)
+		ca, err := repo.store.GetCA(ctx, projectID, parentCAID)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "fail to create certificate")
 		}
@@ -151,22 +130,22 @@ func (repo *repoImpl) createCertificate(ctx context.Context, projectID string, c
 	return repo.provider.CreateCertificate(ctx, req, parent, parentPrivateKey)
 }
 
-func (repo *repoImpl) GetCertificateAuthority(ctx context.Context, projectID string, poolID string, ID string) (*types.CertificateAuthority, error) {
-	return repo.store.GetCA(ctx, projectID, poolID, ID)
+func (repo *repoImpl) GetCertificateAuthority(ctx context.Context, projectID string, ID string) (*types.CertificateAuthority, error) {
+	return repo.store.GetCA(ctx, projectID, ID)
 }
 
-func (repo *repoImpl) CreateCertificate(ctx context.Context, projectID string, caPoolID string, req *provider.CreateRequest, CAID string) (*types.Certificate, error) {
-	certPEM, certPrivateKeyPEM, err := repo.createCertificate(ctx, projectID, caPoolID, req, CAID)
+func (repo *repoImpl) CreateCertificate(ctx context.Context, projectID string, req *provider.CreateRequest, CAID string) (*types.Certificate, error) {
+	certPEM, certPrivateKeyPEM, err := repo.createCertificate(ctx, projectID, req, CAID)
 	if err != nil {
 		return nil, err
 	}
 
-	chainPEM, err := repo.getCertChain(ctx, projectID, caPoolID)
+	chainPEM, err := repo.getCertChain(ctx, projectID)
 	if err != nil {
 		return nil, errors.Wrap(err, "fail to create certificate")
 	}
 
-	cert, err := repo.store.CreateCertificate(ctx, projectID, caPoolID, req, certPEM, certPrivateKeyPEM, chainPEM, CAID)
+	cert, err := repo.store.CreateCertificate(ctx, projectID, req, certPEM, certPrivateKeyPEM, chainPEM, CAID)
 	if err != nil {
 		return nil, errors.Wrap(err, "fail to create certificate")
 	}
@@ -180,8 +159,8 @@ func (repo *repoImpl) CreateCertificate(ctx context.Context, projectID string, c
 	}, nil
 }
 
-func (repo *repoImpl) getCertChain(ctx context.Context, projectID, caPoolID string) ([]byte, error) {
-	caList, err := repo.store.ListCA(ctx, projectID, caPoolID, store.CAListOpt{Status: common.StatusActive})
+func (repo *repoImpl) getCertChain(ctx context.Context, projectID string) ([]byte, error) {
+	caList, err := repo.store.ListCA(ctx, projectID, store.CAListOpt{Status: common.StatusActive})
 	if len(caList) == 0 {
 		panic("empty calist...: status query가 잘 안되는 듯...")
 	}
@@ -193,17 +172,17 @@ func (repo *repoImpl) getCertChain(ctx context.Context, projectID, caPoolID stri
 	return bytes.Join(fx.Map(caList, func(x *types.CertificateAuthority) []byte { return x.Cert }), []byte{}), nil
 }
 
-func (repo *repoImpl) ListCertificate(ctx context.Context, projectID string, poolID string, opts store.CertificateListOpt) ([]*types.Certificate, error) {
-	return repo.store.ListCertificate(ctx, projectID, poolID, opts)
+func (repo *repoImpl) ListCertificate(ctx context.Context, projectID string, opts store.CertificateListOpt) ([]*types.Certificate, error) {
+	return repo.store.ListCertificate(ctx, projectID, opts)
 }
 
-func (repo *repoImpl) GetCertificate(ctx context.Context, projectID string, poolID string, ID string) (*types.Certificate, error) {
-	return repo.store.GetCertificate(ctx, projectID, poolID, ID)
+func (repo *repoImpl) GetCertificate(ctx context.Context, projectID string, ID string) (*types.Certificate, error) {
+	return repo.store.GetCertificate(ctx, projectID, ID)
 }
 
 // TODO renew subordinate ca, root ca
-func (repo *repoImpl) RenewCertificate(ctx context.Context, projectID string, caPoolID string, certID string) (*types.Certificate, error) {
-	cert, err := repo.store.GetCertificate(ctx, projectID, caPoolID, certID)
+func (repo *repoImpl) RenewCertificate(ctx context.Context, projectID string, certID string) (*types.Certificate, error) {
+	cert, err := repo.store.GetCertificate(ctx, projectID, certID)
 	if err != nil {
 		return nil, errors.Wrap(err, "fail to renew certificate")
 	}
@@ -214,7 +193,7 @@ func (repo *repoImpl) RenewCertificate(ctx context.Context, projectID string, ca
 	}
 	log.Debugf("renew certificate: request=%v", req)
 
-	ca, err := repo.store.GetCA(ctx, projectID, caPoolID, cert.CAID)
+	ca, err := repo.store.GetCA(ctx, projectID, cert.CAID)
 	if err != nil {
 		return nil, errors.Wrap(err, "fail to rewew certificate")
 	}
@@ -234,12 +213,12 @@ func (repo *repoImpl) RenewCertificate(ctx context.Context, projectID string, ca
 		return nil, errors.Wrap(err, "fail to rewew certificate")
 	}
 
-	chainPEM, err := repo.getCertChain(ctx, projectID, caPoolID)
+	chainPEM, err := repo.getCertChain(ctx, projectID)
 	if err != nil {
 		return nil, errors.Wrap(err, "fail to rewew certificate")
 	}
 
-	newCert, err := repo.store.CreateCertificate(ctx, projectID, caPoolID, req, certPEMBytes, keyPEMByte, chainPEM, cert.CAID)
+	newCert, err := repo.store.CreateCertificate(ctx, projectID, req, certPEMBytes, keyPEMByte, chainPEM, cert.CAID)
 	if err != nil {
 		return nil, errors.Wrap(err, "fail to rewew certificate")
 	}
@@ -247,27 +226,27 @@ func (repo *repoImpl) RenewCertificate(ctx context.Context, projectID string, ca
 	return newCert, nil
 }
 
-func (repo *repoImpl) RevokeCertificate(ctx context.Context, projectID string, caPoolID string, certID string, reason x509types.RevokeReason) (*types.Certificate, error) {
-	if err := repo.store.RevokeCertificate(ctx, projectID, caPoolID, certID, reason); err != nil {
+func (repo *repoImpl) RevokeCertificate(ctx context.Context, projectID string, certID string, reason x509types.RevokeReason) (*types.Certificate, error) {
+	if err := repo.store.RevokeCertificate(ctx, projectID, certID, reason); err != nil {
 		return nil, errors.Wrap(err, "fail to revoke certificate")
 	}
 
-	if err := repo.updateCRL(ctx, projectID, caPoolID); err != nil {
+	if err := repo.updateCRL(ctx, projectID); err != nil {
 		return nil, errors.Wrap(err, "fail to revoke certificate")
 	}
 
-	return repo.store.GetCertificate(ctx, projectID, caPoolID, certID)
+	return repo.store.GetCertificate(ctx, projectID, certID)
 }
 
-func (repo *repoImpl) updateCRL(ctx context.Context, projectID, caPoolID string) error {
-	log.Debugf("update CRL: project=%s, pool=%s", projectID, caPoolID)
+func (repo *repoImpl) updateCRL(ctx context.Context, projectID string) error {
+	log.Debugf("update CRL: project=%s", projectID)
 
-	certs, err := repo.store.ListCertificate(ctx, projectID, caPoolID, store.CertificateListOpt{Status: common.StatusRevoked})
+	certs, err := repo.store.ListCertificate(ctx, projectID, store.CertificateListOpt{Status: common.StatusRevoked})
 	if err != nil {
 		return errors.Wrap(err, "fail to update CRL")
 	}
 
-	currentCRL, exists := repo.crls[projectID+"/"+caPoolID]
+	currentCRL, exists := repo.crls[projectID]
 	nextNumber := big.NewInt(1)
 	if exists {
 		nextNumber = currentCRL.template.Number.Add(currentCRL.template.Number, big.NewInt(1))
@@ -291,7 +270,7 @@ func (repo *repoImpl) updateCRL(ctx context.Context, projectID, caPoolID string)
 	}
 
 	// get root CA for signer
-	cas, err := repo.store.ListCA(ctx, projectID, caPoolID, store.CAListOpt{CAID: store.NullableStringOpt{IsNull: true}})
+	cas, err := repo.store.ListCA(ctx, projectID, store.CAListOpt{CAID: store.NullableStringOpt{IsNull: true}})
 	if err != nil {
 		return errors.Wrap(err, "fail to update CRL")
 	}
@@ -320,7 +299,7 @@ func (repo *repoImpl) updateCRL(ctx context.Context, projectID, caPoolID string)
 	repo.muCRL.Lock()
 	defer repo.muCRL.Unlock()
 
-	repo.crls[projectID+"/"+caPoolID] = &crlInfo{
+	repo.crls[projectID] = &crlInfo{
 		template: template,
 		crlBytes: crlBytes,
 	}
@@ -328,20 +307,20 @@ func (repo *repoImpl) updateCRL(ctx context.Context, projectID, caPoolID string)
 	return nil
 }
 
-func (repo *repoImpl) GetCRL(ctx context.Context, projectID string, caPoolID string) ([]byte, error) {
-	crl, ok := repo.crls[projectID+"/"+caPoolID]
+func (repo *repoImpl) GetCRL(ctx context.Context, projectID string) ([]byte, error) {
+	crl, ok := repo.crls[projectID]
 	if !ok {
-		if err := repo.updateCRL(ctx, projectID, caPoolID); err != nil {
+		if err := repo.updateCRL(ctx, projectID); err != nil {
 			return nil, errors.Wrap(err, "fail to get crl")
 		}
-		crl = repo.crls[projectID+"/"+caPoolID]
+		crl = repo.crls[projectID]
 	}
 
 	if crl.template.NextUpdate.Before(time.Now()) {
-		if err := repo.updateCRL(ctx, projectID, caPoolID); err != nil {
+		if err := repo.updateCRL(ctx, projectID); err != nil {
 			return nil, errors.Wrap(err, "fail to get crl")
 		}
-		crl = repo.crls[projectID+"/"+caPoolID]
+		crl = repo.crls[projectID]
 	}
 
 	return crl.crlBytes, nil
@@ -368,12 +347,11 @@ func (repo *repoImpl) crlUpdateCheck(ctx context.Context) (err error) {
 	log.Debugf("check CRL need to update..")
 
 	fx.ForEachMap(repo.crls, func(k string, v *crlInfo) {
-		s := strings.Split(k, "/")
-		projectID, caPoolID := s[0], s[1]
+		projectID := k
 
 		if v.template.NextUpdate.After(time.Now()) {
-			if ee := repo.updateCRL(ctx, projectID, caPoolID); ee != nil {
-				err = multierror.Append(errors.Wrapf(err, "fail to crlUpdateCheck: project=%s, pool=%s", projectID, caPoolID))
+			if ee := repo.updateCRL(ctx, projectID); ee != nil {
+				err = multierror.Append(errors.Wrapf(err, "fail to crlUpdateCheck: project=%s", projectID))
 			}
 		}
 	})

@@ -20,7 +20,6 @@ type (
 	CreateRequest = provider.CreateRequest
 
 	ProjectListOpt     = store.ProjectListOpt
-	CAPoolListOpt      = store.CAPoolListOpt
 	CertificateListOpt = store.CertificateListOpt
 )
 

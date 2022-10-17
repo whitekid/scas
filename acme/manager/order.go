@@ -135,7 +135,7 @@ func (m *Manager) FinalizeOrder(ctx context.Context, orderID string, csr *x509.C
 	// TODO scas certificate generator
 	var caIntf ca.Interface
 	if proj.UseRemoteCA {
-		caIntf = ca.NewSCAS(proj.RemoteCAEndpoint, proj.RemoteCAProjectID, "", proj.RemoteCAID)
+		caIntf = ca.NewSCAS(proj.RemoteCAEndpoint, proj.RemoteCAProjectID, proj.RemoteCAID)
 		panic("Not Implemented")
 	} else {
 		caIntf = ca.NewLocal()

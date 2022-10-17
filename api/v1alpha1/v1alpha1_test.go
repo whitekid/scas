@@ -43,8 +43,7 @@ func newTestServerWithFixture(ctx context.Context, t *testing.T) (*httptest.Serv
 
 	// setup fixture
 	project := testutils.Must1(repo.CreateProject(ctx, testProjectName))
-	caPool := testutils.Must1(repo.CreateCAPool(ctx, project.ID, testCAPoolName))
-	rootCA := testutils.Must1(repo.CreateCertificateAuthority(ctx, project.ID, caPool.ID, &certmanager.CreateRequest{
+	rootCA := testutils.Must1(repo.CreateCertificateAuthority(ctx, project.ID, &certmanager.CreateRequest{
 		CommonName:   "example.com ROOT CA",
 		KeyAlgorithm: x509types.ECDSA_P384,
 		KeyUsage:     x509types.RootCAKeyUsage,
@@ -53,7 +52,7 @@ func newTestServerWithFixture(ctx context.Context, t *testing.T) (*httptest.Serv
 		NotBefore:    helper.AfterNow(0, -1, 0),
 		IsCA:         true,
 	}, ""))
-	subCA := testutils.Must1(repo.CreateCertificateAuthority(ctx, project.ID, caPool.ID, &certmanager.CreateRequest{
+	subCA := testutils.Must1(repo.CreateCertificateAuthority(ctx, project.ID, &certmanager.CreateRequest{
 		CommonName:   "example.com CA 1",
 		KeyAlgorithm: x509types.ECDSA_P256,
 		KeyUsage:     x509types.SubCAKeyUsage,
@@ -62,7 +61,7 @@ func newTestServerWithFixture(ctx context.Context, t *testing.T) (*httptest.Serv
 		NotBefore:    helper.AfterNow(0, -0, 0),
 		IsCA:         true,
 	}, rootCA.ID))
-	cert := testutils.Must1(repo.CreateCertificate(ctx, project.ID, caPool.ID, &certmanager.CreateRequest{
+	cert := testutils.Must1(repo.CreateCertificate(ctx, project.ID, &certmanager.CreateRequest{
 		CommonName:   testServerCN,
 		Hosts:        []string{testServerCN},
 		KeyAlgorithm: x509types.RSA_2048,
@@ -89,7 +88,6 @@ type TestRepo struct {
 
 var (
 	testProjectName     = "scas project"
-	testCAPoolName      = "example.local"
 	testServerCN        = "server.example.local.127.0.0.1.sslip.io"
 	testRevokedServerCN = "revoked.example.local.127.0.0.1.sslip.io"
 )
@@ -107,14 +105,9 @@ func TestScenario(t *testing.T) {
 	require.NoError(t, err)
 	projectSvc := v1alpha1Svc.Projects(project.ID)
 
-	// create Pool
-	caPool, err := projectSvc.Pools("").Create(ctx, &CAPool{Name: testCAPoolName})
-	require.NoError(t, err)
-
 	// create root CA
-	poolSvc := projectSvc.Pools(caPool.ID)
 	rootCAReq := &CertificateRequest{
-		CommonName:         caPool.ID + " ROOT CA 1",
+		CommonName:         "ROOT CA 1",
 		Country:            "country",
 		Organization:       "example.com org",
 		OrganizationalUnit: "example.com org unit",
@@ -127,20 +120,20 @@ func TestScenario(t *testing.T) {
 		ExtKeyUsage:        x509types.RootCAExtKeyUsage,
 		NotAfter:           helper.AfterNow(5, 0, 0),
 		NotBefore:          helper.AfterNow(0, -1, 0),
-		CRL:                fmt.Sprintf("%s/%s/capools/%s/crl", ts.URL, project.ID, caPool.ID),
+		CRL:                fmt.Sprintf("%s/%s/crl", ts.URL, project.ID),
 	}
-	newCA, err := poolSvc.CA().Create(ctx, rootCAReq)
+	newCA, err := projectSvc.CA().Create(ctx, rootCAReq)
 	require.NoError(t, err)
 	rootCAReq.ID = newCA.ID
 	require.Equal(t, rootCAReq, newCA)
 
-	gotCA, err := poolSvc.CA().Get(ctx, newCA.ID)
+	gotCA, err := projectSvc.CA().Get(ctx, newCA.ID)
 	require.NoError(t, err)
 	require.Equal(t, rootCAReq, gotCA)
 
 	// create subordinate ca, with parent
 	subCAReq := &CertificateRequest{
-		CommonName:   testCAPoolName + " CA",
+		CommonName:   " CA",
 		KeyAlgorithm: x509types.ECDSA_P256,
 		KeyUsage:     x509types.SubCAKeyUsage,
 		ExtKeyUsage:  x509types.SubCAExtKeyUsage,
@@ -149,7 +142,7 @@ func TestScenario(t *testing.T) {
 		CAID:         newCA.ID,
 		CRL:          rootCAReq.CRL,
 	}
-	subCA, err := poolSvc.CA().Create(ctx, subCAReq)
+	subCA, err := projectSvc.CA().Create(ctx, subCAReq)
 	require.NoError(t, err)
 
 	subCAReq.ID = subCA.ID
@@ -157,7 +150,7 @@ func TestScenario(t *testing.T) {
 	require.Equal(t, subCAReq, subCA)
 
 	// create server certificate
-	newCert, err := poolSvc.Certificates().Create(ctx, &CertificateRequest{
+	newCert, err := projectSvc.Certificates().Create(ctx, &CertificateRequest{
 		CommonName:   testServerCN,
 		Hosts:        []string{testServerCN},
 		KeyAlgorithm: x509types.RSA_2048,
@@ -175,7 +168,7 @@ func TestScenario(t *testing.T) {
 	require.NotNil(t, newCert.ChainCrtPEM)
 
 	// get server certficate
-	cert, err := poolSvc.Certificates().Get(ctx, newCert.ID)
+	cert, err := projectSvc.Certificates().Get(ctx, newCert.ID)
 	require.NoError(t, err)
 	require.Equal(t, newCert, cert)
 
@@ -191,14 +184,14 @@ func TestScenario(t *testing.T) {
 		NotBefore:    helper.AfterNow(0, -1, 0),
 		CAID:         subCA.ID,
 	}
-	certForRevoke, err := poolSvc.Certificates().Create(ctx, revokedCertReq)
+	certForRevoke, err := projectSvc.Certificates().Create(ctx, revokedCertReq)
 	require.NoError(t, err)
 
 	// revoke current certificate
-	err = poolSvc.Certificates().Revoke(ctx, certForRevoke.ID, x509types.RevokeSuperseded)
+	err = projectSvc.Certificates().Revoke(ctx, certForRevoke.ID, x509types.RevokeSuperseded)
 	require.NoError(t, err)
 
-	revokedCert, err := poolSvc.Certificates().Get(ctx, certForRevoke.ID)
+	revokedCert, err := projectSvc.Certificates().Get(ctx, certForRevoke.ID)
 	require.NoError(t, err)
 	require.Equal(t, common.StatusRevoked, revokedCert.Status)
 }
@@ -233,9 +226,7 @@ func Test_v1Alpha1API_createCA(t *testing.T) {
 			projectList := testutils.Must1(v1alpha1API.Projects("").List(ctx))
 			projectID := projectList.Items[0].ID
 
-			pools := testutils.Must1(v1alpha1API.Projects(projectID).Pools("").List(ctx))
-
-			got, err := v1alpha1API.Projects(projectID).Pools(pools.Items[0].ID).CA().Create(ctx, tt.args.req)
+			got, err := v1alpha1API.Projects(projectID).CA().Create(ctx, tt.args.req)
 			require.Falsef(t, (err != nil) != tt.wantErr, "v1Alpha1API.createCA() error = %v, wantErr %v", err, tt.wantErr)
 			if tt.wantErr {
 				return
@@ -259,19 +250,17 @@ func TestRenewal(t *testing.T) {
 	projectList := testutils.Must1(v1alpha1API.Projects("").List(ctx))
 	projectID := projectList.Items[0].ID
 
-	pools := testutils.Must1(v1alpha1API.Projects(projectID).Pools("").List(ctx))
-
-	r := testutils.Must1(repo.ListCertificate(ctx, projectID, pools.Items[0].ID, certmanager.CertificateListOpt{Status: common.StatusActive}))
+	r := testutils.Must1(repo.ListCertificate(ctx, projectID, certmanager.CertificateListOpt{Status: common.StatusActive}))
 	require.NotEqual(t, 0, len(r))
 	testServerCertID := r[0].ID
 
-	poolAPI := v1alpha1.New(ts.URL).Projects(projectID).Pools(pools.Items[0].ID)
+	projAPI := v1alpha1.New(ts.URL).Projects(projectID)
 
-	certList, err := poolAPI.Certificates().List(ctx)
+	certList, err := projAPI.Certificates().List(ctx)
 	require.NoError(t, err)
 	require.NotEqual(t, 0, len(certList.Items))
 
-	certService := poolAPI.Certificates()
+	certService := projAPI.Certificates()
 	updatedCert, err := certService.Renewal(ctx, testServerCertID)
 	require.NoError(t, err)
 	require.NotEqual(t, "", updatedCert.ID)
@@ -291,14 +280,12 @@ func TestRevoke(t *testing.T) {
 	projectList := testutils.Must1(v1alpha1API.Projects("").List(ctx))
 	projectID := projectList.Items[0].ID
 
-	pools := testutils.Must1(v1alpha1API.Projects(projectID).Pools("").List(ctx))
-
-	r := testutils.Must1(repo.ListCertificate(ctx, projectID, pools.Items[0].ID, certmanager.CertificateListOpt{Status: common.StatusActive}))
+	r := testutils.Must1(repo.ListCertificate(ctx, projectID, certmanager.CertificateListOpt{Status: common.StatusActive}))
 	require.NotEqual(t, 0, len(r))
 	testServerCertID := r[0].ID
 
-	poolAPI := v1alpha1.New(ts.URL).Projects(projectID).Pools(pools.Items[0].ID)
-	leafAPI := poolAPI.Certificates()
+	projAPI := v1alpha1.New(ts.URL).Projects(projectID)
+	leafAPI := projAPI.Certificates()
 	cert, err := leafAPI.Get(ctx, testServerCertID)
 	require.NoError(t, err)
 	require.Equal(t, testServerCertID, cert.ID)
@@ -307,7 +294,7 @@ func TestRevoke(t *testing.T) {
 	err = leafAPI.Revoke(ctx, testServerCertID, x509types.RevokeSuperseded)
 	require.NoError(t, err)
 
-	crlPEMBytes, err := poolAPI.GetCRL(ctx)
+	crlPEMBytes, err := projAPI.GetCRL(ctx)
 	require.NoError(t, err)
 	require.NotEqual(t, 0, len(crlPEMBytes))
 
@@ -339,44 +326,8 @@ func Test_v1Alpha1API_getCertificate(t *testing.T) {
 			projectList := testutils.Must1(v1alpha1API.Projects("").List(ctx))
 			projectID := projectList.Items[0].ID
 
-			_, err := v1alpha1.New(ts.URL).Projects(projectID).Pools(testCAPoolName).Certificates().Get(ctx, tt.args.ID)
+			_, err := v1alpha1.New(ts.URL).Projects(projectID).Certificates().Get(ctx, tt.args.ID)
 			require.Falsef(t, (err != nil) != tt.wantErr, "v1Alpha1API.getCertificate() error = %v, wantErr %v", err, tt.wantErr)
-
-			if tt.wantCode > 0 {
-				var e *v1alpha1.HttpError
-				require.ErrorAs(t, err, &e)
-				require.Equal(t, tt.wantCode, e.Code())
-			}
-		})
-	}
-}
-
-func Test_v1Alpha1API_createCAPool(t *testing.T) {
-	type args struct {
-		name string
-	}
-	tests := []struct {
-		name     string
-		args     args
-		wantErr  bool
-		wantCode int
-	}{
-		{"duplicate", args{testCAPoolName}, true, http.StatusConflict},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
-			ts, _ := newTestServerWithFixture(ctx, t)
-
-			v1alpha1API := v1alpha1.New(ts.URL)
-			projectList := testutils.Must1(v1alpha1API.Projects("").List(ctx))
-			projectID := projectList.Items[0].ID
-
-			_, err := v1alpha1.New(ts.URL).Projects(projectID).Pools("").Create(ctx, &v1alpha1.CAPool{Name: testCAPoolName})
-
-			require.Falsef(t, (err != nil) != tt.wantErr, "v1Alpha1API.createCAPool() error = %v, wantErr %v", err, tt.wantErr)
 
 			if tt.wantCode > 0 {
 				var e *v1alpha1.HttpError

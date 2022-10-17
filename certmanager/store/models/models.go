@@ -21,21 +21,6 @@ func (p *Project) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
-type CAPool struct {
-	gorm.Model
-
-	ID        string `gorm:"primaryKey;size:22;check:id<>''"`
-	Name      string `gorm:"not null;uniqueIndex:capool_idx_name;size:256;check:name<>''" validate:"required"`
-	ProjectID string `gorm:"not null;uniqueIndex:capool_idx_name;size:22;check:project_id<>''" validate:"required"`
-	Project   *Project
-}
-
-func (p *CAPool) BeforeCreate(tx *gorm.DB) error {
-	gormx.GenerateID(&p.ID)
-
-	return nil
-}
-
 // TODO certificate와 비슷한데, 통합?
 type CertificateAuthority struct {
 	gorm.Model
@@ -43,8 +28,6 @@ type CertificateAuthority struct {
 	ID                   string                `gorm:"primaryKey;size:22;check:id<>''"`
 	ProjectID            string                `gorm:"not null;size:22;check:project_id<>''" validate:"required"`
 	Project              *Project              `gorm:"foreignKey:ProjectID"`
-	CAPoolID             string                `gorm:"not null;size:22;check:ca_pool_id<>''" validate:"required"`
-	CAPool               *CAPool               `gorm:"foreignKey:CAPoolID"`
 	CAID                 *string               `gorm:"size:22"` // parent CAID, if nil it's root CA
 	CertificateAuthority *CertificateAuthority `gorm:"foreignKey:CAID"`
 	Status               string                `gorm:"not null;size:20" validate:"required"`
@@ -66,8 +49,6 @@ type Certificate struct {
 	ID                   string                `gorm:"primaryKey;size:22;check:id<>''"`
 	ProjectID            string                `gorm:"not null;size:22;check:project_id<>''" validate:"required"`
 	Project              *Project              `gorm:"foreignKey:ProjectID"`
-	CAPoolID             string                `gorm:"not null;size:22;check:ca_pool_id<>''" validate:"required"`
-	CAPool               *CAPool               `gorm:"foreignKey:CAPoolID"`
 	CAID                 string                `gorm:"not null;size:22;check:ca_id<>''"`
 	CertificateAuthority *CertificateAuthority `gorm:"foreignKey:CAID"`
 

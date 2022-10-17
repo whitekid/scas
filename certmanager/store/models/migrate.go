@@ -6,13 +6,24 @@ import (
 )
 
 func Migrate(db *gorm.DB) error {
-	if err := db.AutoMigrate(&Project{}, &CAPool{}, &CertificateAuthority{}); err != nil {
-		return errors.Wrap(err, "automirate failed")
+	models := [][]interface{}{
+		{&Project{}, &CertificateAuthority{}},
+		{&Certificate{}},
 	}
 
-	if err := db.AutoMigrate(&Certificate{}); err != nil {
-		return errors.Wrap(err, "automirate failed")
+	for _, m := range models {
+		if err := autoMigate(db, m...); err != nil {
+			return err
+		}
+
 	}
 
+	return nil
+}
+
+func autoMigate(db *gorm.DB, m ...any) error {
+	if err := db.AutoMigrate(m...); err != nil {
+		return errors.Wrap(err, "automirate failed")
+	}
 	return nil
 }

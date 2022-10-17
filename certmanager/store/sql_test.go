@@ -14,7 +14,6 @@ import (
 	"scas/client/common"
 	"scas/client/common/x509types"
 	"scas/pkg/helper"
-	"scas/pkg/helper/gormx"
 	"scas/pkg/testutils"
 )
 
@@ -22,13 +21,12 @@ type testSQL struct {
 	*sqlStoreImpl
 
 	projectID string
-	caPoolID  string
 }
 
-func (s *testSQL) updateStatus(ctx context.Context, projectID string, caPoolID string, certID string, status common.Status) error {
-	log.Debugf("updateStatus(): project=%s, capool=%s, cert=%s", projectID, caPoolID, certID)
+func (s *testSQL) updateStatus(ctx context.Context, projectID string, certID string, status common.Status) error {
+	log.Debugf("updateStatus(): project=%s, cert=%s", projectID, certID)
 
-	cert, err := s.getCertificate(ctx, projectID, caPoolID, certID)
+	cert, err := s.getCertificate(ctx, projectID, certID)
 	if err != nil {
 		return errors.Wrap(err, "fail to update certificate status")
 	}
@@ -44,32 +42,30 @@ func (s *testSQL) updateStatus(ctx context.Context, projectID string, caPoolID s
 
 const (
 	testProjectName = "project 1"
-	testPoolName    = "pool 1"
 )
 
 func newSQL(ctx context.Context, t *testing.T, dburl string) *testSQL {
 	s := testSQL{sqlStoreImpl: NewSQL(dburl).(*sqlStoreImpl)}
 
 	project := testutils.Must1(s.createProject(ctx, testProjectName))
-	caPool := testutils.Must1(s.createCAPool(ctx, project.ID, testPoolName))
-	rootCA := testutils.Must1(s.CreateCA(ctx, project.ID, caPool.ID, nil, nil, nil, nil))
-	subCA := testutils.Must1(s.CreateCA(ctx, project.ID, caPool.ID, nil, nil, nil, &rootCA.ID))
-	testutils.Must1(s.CreateCertificate(ctx, project.ID, caPool.ID, &provider.CreateRequest{
+	rootCA := testutils.Must1(s.CreateCA(ctx, project.ID, nil, nil, nil, nil))
+	subCA := testutils.Must1(s.CreateCA(ctx, project.ID, nil, nil, nil, &rootCA.ID))
+	testutils.Must1(s.CreateCertificate(ctx, project.ID, &provider.CreateRequest{
 		CommonName:   "server.example.com",
 		KeyAlgorithm: x509types.ECDSA_P384,
 		NotAfter:     helper.AfterNow(1, 0, 0),
 		NotBefore:    helper.AfterNow(0, -1, 0),
 	}, nil, nil, nil, subCA.ID))
 
-	cert := testutils.Must1(s.CreateCertificate(ctx, project.ID, caPool.ID, &provider.CreateRequest{
+	cert := testutils.Must1(s.CreateCertificate(ctx, project.ID, &provider.CreateRequest{
 		CommonName:   "invalid.example.com",
 		KeyAlgorithm: x509types.ECDSA_P256,
 		NotAfter:     helper.AfterNow(1, 0, 0),
 		NotBefore:    helper.AfterNow(0, -1, 0),
 	}, nil, nil, nil, subCA.ID))
-	require.NoError(t, s.updateStatus(ctx, cert.ProjectID, cert.CAPoolID, cert.ID, common.StatusSuspended))
+	require.NoError(t, s.updateStatus(ctx, cert.ProjectID, cert.ID, common.StatusSuspended))
 
-	s.projectID, s.caPoolID = project.ID, caPool.ID
+	s.projectID = project.ID
 	return &s
 }
 
@@ -95,7 +91,7 @@ func Test_sqlStoreImpl_listCertificate(t *testing.T) {
 				resetFixture()
 				s := newSQL(ctx, t, dburl)
 
-				got, err := s.listCertificate(ctx, s.projectID, s.caPoolID, tt.args.opts)
+				got, err := s.listCertificate(ctx, s.projectID, tt.args.opts)
 				if (err != nil) != tt.wantErr {
 					t.Errorf("sqlStoreImpl.listCertificate() error = %v, wantErr %v", err, tt.wantErr)
 					return
@@ -110,40 +106,4 @@ func Test_sqlStoreImpl_listCertificate(t *testing.T) {
 			})
 		})
 	}
-}
-
-func Test_sqlStoreImpl_CreateCAPool(t *testing.T) {
-	testutils.ForEachSQLDriver(t, func(t *testing.T, dburl string, resetFixture func()) {
-		type args struct {
-			projectID  string
-			caPoolName string
-		}
-		tests := []struct {
-			name      string
-			args      args
-			wantErr   bool
-			targetErr error
-		}{
-			{"duplicate name", args{"", testPoolName}, true, gormx.ErrUniqueConstraintFailed},
-			{"invalid project id", args{"invalid-project", "pool-x"}, true, gormx.ErrForeignKeyConstraintFailed},
-		}
-		for _, tt := range tests {
-			t.Run(tt.name, func(t *testing.T) {
-				ctx, cancel := context.WithCancel(context.Background())
-				defer cancel()
-
-				resetFixture()
-				s := newSQL(ctx, t, dburl)
-
-				projectID := fx.Ternary(tt.args.projectID == "", s.projectID, tt.args.projectID)
-
-				_, err := s.CreateCAPool(ctx, projectID, tt.args.caPoolName)
-				if (err != nil) != tt.wantErr {
-					t.Errorf("sqlStoreImpl.CreateCAPool() error = %v, wantErr %+v", err, tt.wantErr)
-					return
-				}
-				require.ErrorIs(t, err, tt.targetErr)
-			})
-		}
-	})
 }
