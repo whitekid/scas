@@ -30,20 +30,25 @@ type Project struct {
 	TermID *string `gorm:"size:22"` // Current Term ID
 	Term   *Term   `gorm:"foreignKey:ProjectID"`
 
-	Website                 string  `gorm:"size:255"`
-	CAAIdentities           Strings `gorm:"size:255"` // rfc6844 Certification Authority Authorization(CAA)
+	Website                 string        `gorm:"size:255"`
+	CAAIdentities           gormx.Strings `gorm:"size:255"` // rfc6844 Certification Authority Authorization(CAA)
 	ExternalAccountRequired bool
 
-	CommonName         string  `gorm:"size:255" validate:"required"`
-	Country            string  `gorm:"size:255"`
-	Organization       string  `gorm:"size:255"`
-	OrganizationalUnit string  `gorm:"size:255"`
-	Locality           string  `gorm:"size:255"`
-	Province           string  `gorm:"size:255"`
-	StreetAddress      string  `gorm:"size:255"`
-	PostalCode         string  `gorm:"size:255"`
-	KeyUsage           string  `gorm:"size:255"`
-	ExtKeyUsage        Strings `gorm:"size:255"`
+	CommonName         string        `gorm:"size:255" validate:"required"`
+	Country            gormx.Strings `gorm:"size:1024"`
+	Organization       gormx.Strings `gorm:"size:1024"`
+	OrganizationalUnit gormx.Strings `gorm:"size:1024"`
+	Locality           gormx.Strings `gorm:"size:1024"`
+	Province           gormx.Strings `gorm:"size:1024"`
+	StreetAddress      gormx.Strings `gorm:"size:1024"`
+	PostalCode         gormx.Strings `gorm:"size:1024"`
+	KeyUsage           string        `gorm:"size:1024"`
+	ExtKeyUsage        gormx.Strings `gorm:"size:1024"`
+
+	UseRemoteCA       bool
+	RemoteCAEndpoint  string `gorm:"size:256"`
+	RemoteCAProjectID string `gorm:"size:256"`
+	RemoteCAID        string `gorm:"size:256"`
 
 	Terms        []*Term        `gorm:"foreignKey:ProjectID"`
 	Accounts     []*Account     `gorm:"foreignKey:ProjectID"`
@@ -79,11 +84,11 @@ func (t *Term) BeforeCreate(tx *gorm.DB) error {
 type Account struct {
 	gorm.Model
 
-	ID                  string  `gorm:"primaryKey;size:22;uniqueIndex:idx_acct_proj_id;check:id <> ''"`
-	ProjectID           string  `gorm:"not null;size:22;uniqueIndex:idx_acct_proj_id;check:project_id<>''" validate:"required"`
-	Key                 string  `gorm:"not null;size:2048;not null" validate:"required"`
-	Status              string  `gorm:"not null;size:20;not null" validate:"required"`
-	Contacts            Strings `gorm:"not null;size:250;not null;check:contacts <> ''" validate:"required"`
+	ID                  string        `gorm:"primaryKey;size:22;uniqueIndex:idx_acct_proj_id;check:id <> ''"`
+	ProjectID           string        `gorm:"not null;size:22;uniqueIndex:idx_acct_proj_id;check:project_id<>''" validate:"required"`
+	Key                 string        `gorm:"not null;size:2048;not null" validate:"required"`
+	Status              string        `gorm:"not null;size:20;not null" validate:"required"`
+	Contacts            gormx.Strings `gorm:"not null;size:250;not null;check:contacts <> ''" validate:"required"`
 	TermOfServiceAgreed bool
 	TermAgreeAt         *time.Time
 

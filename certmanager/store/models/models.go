@@ -11,7 +11,7 @@ import (
 type Project struct {
 	gorm.Model
 
-	ID   string `gorm:"primaryKey;size:22;check:id <> ''"`
+	ID   string `gorm:"primaryKey;size:22;check:id<>''"`
 	Name string `gorm:"not null;size:256:check:name<>''" validate:"required"`
 }
 

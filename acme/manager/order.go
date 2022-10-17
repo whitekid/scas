@@ -132,20 +132,28 @@ func (m *Manager) FinalizeOrder(ctx context.Context, orderID string, csr *x509.C
 		return nil, errors.Wrapf(err, "fail to finalize certificate")
 	}
 
-	caGen := ca.NewLocal()
+	// TODO scas certificate generator
+	var caIntf ca.Interface
+	if proj.UseRemoteCA {
+		caIntf = ca.NewSCAS(proj.RemoteCAEndpoint, proj.RemoteCAProjectID, "", proj.RemoteCAID)
+		panic("Not Implemented")
+	} else {
+		caIntf = ca.NewLocal()
+	}
+
 	// TODO private key를 어디선가 써야하겠지?
-	certPEM, _, chainPEM, err := caGen.CreateCertificate(ctx, &ca.CreateRequest{
+	certPEM, _, chainPEM, err := caIntf.CreateCertificate(ctx, &ca.CreateRequest{
 		SerialNumber: serial,
 		Subject:      csr.Subject,
 		Issuer: pkix.Name{
 			CommonName:         proj.CommonName,
-			Country:            []string{proj.Country},
-			Organization:       []string{proj.Organization},
-			OrganizationalUnit: []string{proj.OrganizationalUnit},
-			Locality:           []string{proj.Locality},
-			Province:           []string{proj.Province},
-			StreetAddress:      []string{proj.StreetAddress},
-			PostalCode:         []string{proj.PostalCode},
+			Country:            proj.Country,
+			Organization:       proj.Organization,
+			OrganizationalUnit: proj.OrganizationalUnit,
+			Locality:           proj.Locality,
+			Province:           proj.Province,
+			StreetAddress:      proj.StreetAddress,
+			PostalCode:         proj.PostalCode,
 		},
 		DNSNames:       csr.DNSNames,
 		EmailAddresses: csr.EmailAddresses,

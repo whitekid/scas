@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/lithammer/shortuuid/v4"
 	"github.com/whitekid/goxp/fx"
 )
 
@@ -38,3 +39,4 @@ func After(ctx context.Context, d time.Duration, fn func()) {
 
 func SHA256Sum(data []byte) []byte         { return Hash(crypto.SHA256.New(), data) }
 func Hash(h hash.Hash, data []byte) []byte { h.Write(data); return h.Sum(nil) }
+func NewID() string                        { return shortuuid.New() }

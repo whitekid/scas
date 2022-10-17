@@ -5,7 +5,6 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/lithammer/shortuuid/v4"
 	"github.com/whitekid/goxp"
 	"github.com/whitekid/goxp/log"
 	"gorm.io/driver/mysql"
@@ -126,6 +125,6 @@ func Count(tx *gorm.DB) int64 {
 
 // GenerateID generate ID
 func GenerateID(id *string) error {
-	*id = shortuuid.New()
+	*id = helper.NewID()
 	return nil
 }

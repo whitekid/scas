@@ -23,6 +23,7 @@ func (s *Server) createProject(c echo.Context) error {
 
 	proj, err := s.manager.CreateProject(c.Request().Context(), &store.Project{
 		Name:               req.Name,
+		Website:            req.Website,
 		CommonName:         req.CommonName,
 		Country:            req.Country,
 		Organization:       req.Organization,
@@ -33,17 +34,41 @@ func (s *Server) createProject(c echo.Context) error {
 		PostalCode:         req.PostalCode,
 		KeyUsage:           x509x.StrToKeyUsage(req.KeyUsage),
 		ExtKeyUsage:        fx.Map(req.ExtKeyUsage, func(s string) x509.ExtKeyUsage { return x509x.StrToExtKeyUsage(s) }),
+		UseRemoteCA:        req.UseRemoteCA,
+		RemoteCAEndpoint:   req.RemoteCAEndpoint,
+		RemoteCAProjectID:  req.RemoteCAProjectID,
+		RemoteCAID:         req.RemoteCAID,
 	})
 	if err != nil {
 		return errors.Wrapf(err, "fail to create project") // TODO error handling
 	}
 
-	return c.JSON(http.StatusOK, &acmeclient.Project{
-		ID:           proj.ID,
-		Name:         proj.Name,
-		ACMEEndpoint: s.acmeURL(proj.ID),
-		CreatedAt:    proj.CreatedAt,
-	})
+	return c.JSON(http.StatusOK, s.projectToResouce(proj))
+}
+
+func (s *Server) projectToResouce(in *store.Project) *acmeclient.Project {
+	return &acmeclient.Project{
+		ID:                 in.ID,
+		Name:               in.Name,
+		TermID:             in.TermID,
+		Website:            in.Website,
+		ACMEEndpoint:       s.acmeURL(in.ID),
+		CreatedAt:          in.CreatedAt,
+		CommonName:         in.CommonName,
+		Country:            in.Country,
+		Organization:       in.Organization,
+		OrganizationalUnit: in.OrganizationalUnit,
+		Locality:           in.Locality,
+		Province:           in.Province,
+		StreetAddress:      in.StreetAddress,
+		PostalCode:         in.PostalCode,
+		KeyUsage:           x509x.KeyUsageToStr(in.KeyUsage),
+		ExtKeyUsage:        fx.Ternary(len(in.ExtKeyUsage) > 0, fx.Map(in.ExtKeyUsage, func(x x509.ExtKeyUsage) string { return x509x.ExtKeyUsageToStr(x) }), nil),
+		UseRemoteCA:        in.UseRemoteCA,
+		RemoteCAEndpoint:   in.RemoteCAEndpoint,
+		RemoteCAProjectID:  in.RemoteCAProjectID,
+		RemoteCAID:         in.RemoteCAID,
+	}
 }
 
 func (s *Server) getProject(c echo.Context) error {
@@ -54,11 +79,5 @@ func (s *Server) getProject(c echo.Context) error {
 		return errors.Wrapf(err, "fail to get project") // TODO error handling
 	}
 
-	return c.JSON(http.StatusOK, &acmeclient.Project{
-		ID:           proj.ID,
-		Name:         proj.Name,
-		TermID:       proj.TermID,
-		ACMEEndpoint: s.acmeURL(proj.ID),
-		CreatedAt:    proj.CreatedAt,
-	})
+	return c.JSON(http.StatusOK, s.projectToResouce(proj))
 }
