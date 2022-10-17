@@ -50,12 +50,8 @@ func TestSCAS(t *testing.T) {
 		proj, err := fixture.client.Projects("").Create(ctx, &scasclient.Project{Name: "test project"})
 		require.NoError(t, err)
 
-		pool, err := fixture.client.Projects(proj.ID).Pools("").Create(ctx, &scasclient.CAPool{Name: "test pool"})
-		require.NoError(t, err)
-
 		// create root ca
-		// TODO CA()의 용법이 Project(), Pool()의 용법과 다르네...
-		ca, err := fixture.client.Projects(proj.ID).Pools(pool.ID).CA().Create(ctx, &scasclient.CertificateRequest{
+		ca, err := fixture.client.Projects(proj.ID).CA().Create(ctx, &scasclient.CertificateRequest{
 			CommonName:   "root CA",
 			KeyAlgorithm: x509types.ECDSA_P256,
 			KeyUsage:     x509types.RootCAKeyUsage,
@@ -65,7 +61,7 @@ func TestSCAS(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		subCa, err := fixture.client.Projects(proj.ID).Pools(pool.ID).CA().Create(ctx, &scasclient.CertificateRequest{
+		subCa, err := fixture.client.Projects(proj.ID).CA().Create(ctx, &scasclient.CertificateRequest{
 			CommonName:   "Subordinate CA",
 			KeyAlgorithm: x509types.ECDSA_P256,
 			KeyUsage:     x509types.SubCAKeyUsage,
@@ -76,7 +72,7 @@ func TestSCAS(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		scas := NewSCAS(fixture.url, proj.ID, pool.ID, subCa.ID).(*scasImpl)
+		scas := NewSCAS(fixture.url, proj.ID, subCa.ID).(*scasImpl)
 		req := &CreateRequest{
 			SerialNumber: x509x.RandomSerial(),
 			// TODO Issuer

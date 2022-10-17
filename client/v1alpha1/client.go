@@ -95,32 +95,13 @@ func (svc *ProjectService) List(ctx context.Context) (*ProjectList, error) {
 	return &list, nil
 }
 
-func (svc *ProjectService) Pools(caPoolID string) *PoolService {
-	return &PoolService{client: svc.client, endpoint: svc.endpoint + "/capools/" + caPoolID}
-}
-
-type CAPoolList struct {
-	Items []*CAPool
-}
-
-type CAPool struct {
-	ID      string `json:",omitempty"`
-	Name    string `validate:"required"`
-	Created *common.Timestamp
-}
-
 type CA struct {
 	ID      string
 	Created *common.Timestamp
 	Root    bool // true if root ca
 }
 
-type PoolService struct {
-	client   *Client
-	endpoint string
-}
-
-func (svc *PoolService) Certificates() *CertificateService {
+func (svc *ProjectService) Certificates() *CertificateService {
 	return &CertificateService{client: svc.client, endpoint: svc.endpoint + "/certificates"}
 }
 
@@ -151,43 +132,11 @@ type CertificateRequest struct {
 	CRL string `json:",omitempty"`
 }
 
-func (svc *PoolService) Create(ctx context.Context, caPool *CAPool) (*CAPool, error) {
-	resp, err := svc.client.sendRequest(ctx, svc.client.client.Post("%s", svc.endpoint).JSON(caPool))
-	if err != nil {
-		return nil, err
-	}
-
-	defer resp.Body.Close()
-	var pool CAPool
-	if err := resp.JSON(&pool); err != nil {
-		return nil, err
-	}
-
-	return &pool, nil
-}
-
-// List ca pool list
-func (svc *PoolService) List(ctx context.Context) (*CAPoolList, error) {
-	resp, err := svc.client.sendRequest(ctx, svc.client.client.Get("%s", svc.endpoint))
-	if err != nil {
-		return nil, err
-	}
-
-	var list CAPoolList
-
-	defer resp.Body.Close()
-	if err := resp.JSON(&list); err != nil {
-		return nil, err
-	}
-
-	return &list, nil
-}
-
-func (svc *PoolService) CA() *CAService {
+func (svc *ProjectService) CA() *CAService {
 	return &CAService{client: svc.client, endpoint: svc.endpoint + "/ca"}
 }
 
-func (svc *PoolService) GetCRL(ctx context.Context) ([]byte, error) {
+func (svc *ProjectService) GetCRL(ctx context.Context) ([]byte, error) {
 	req := svc.client.client.Get("%s/crl", svc.endpoint)
 	resp, err := svc.client.sendRequest(ctx, req)
 	if err != nil {

@@ -123,93 +123,11 @@ func (s *sqlStoreImpl) createProject(ctx context.Context, name string) (*types.P
 	}, nil
 }
 
-func (s *sqlStoreImpl) CreateCAPool(ctx context.Context, projectID string, caPoolName string) (*types.CAPool, error) {
-	log.Debugf("CreateCAPool(): project=%s, capool=%s", projectID, caPoolName)
-	return s.createCAPool(ctx, projectID, caPoolName)
-}
-
-func (s *sqlStoreImpl) createCAPool(ctx context.Context, projectID string, name string) (*types.CAPool, error) {
-	if err := helper.ValidateStruct(&struct {
-		ProjectID string `validate:"required"`
-		Name      string `validate:"required"`
-	}{
-		ProjectID: projectID,
-		Name:      name,
-	}); err != nil {
-		return nil, err
-	}
-
-	capool := &models.CAPool{
-		Name:      name,
-		ProjectID: projectID,
-	}
-	if tx := s.db.Create(capool); tx.Error != nil {
-		return nil, gormx.ConvertSQLError(tx.Error)
-	}
-
-	return s.GetCAPool(ctx, projectID, capool.ID)
-}
-
-func (s *sqlStoreImpl) GetCAPool(ctx context.Context, projectID string, caPoolID string) (*types.CAPool, error) {
-	log.Debugf("GetCAPool: project=%s, caPoolID=%s", projectID, caPoolID)
-
-	results, err := s.ListCAPool(ctx, projectID, CAPoolListOpt{ID: caPoolID})
-	if err != nil {
-		return nil, errors.Wrap(err, "GetCAPool() failed")
-	}
-
-	switch len(results) {
-	case 0:
-		return nil, gorm.ErrRecordNotFound
-	case 1:
-		return results[0], nil
-	default:
-		return nil, ErrMultipleRecord
-	}
-}
-
-type CAPoolListOpt struct {
-	ID string
-}
-
-func (s *sqlStoreImpl) ListCAPool(ctx context.Context, projectID string, opts CAPoolListOpt) ([]*types.CAPool, error) {
-	results, err := s.listCAPool(ctx, projectID, opts)
-	if err != nil {
-		return nil, errors.Wrap(err, "fail to ListCAPool()")
-	}
-	return fx.Map(results, func(x *models.CAPool) *types.CAPool {
-		return &types.CAPool{
-			ID:        x.ID,
-			Name:      x.Name,
-			ProjectID: x.ProjectID,
-			Created:   x.CreatedAt,
-		}
-	}), nil
-}
-
-func (s *sqlStoreImpl) listCAPool(ctx context.Context, projectID string, opts CAPoolListOpt) ([]*models.CAPool, error) {
-	log.Debugf("listCAPool: project=%s, opts=%+v", projectID, opts)
-
-	w := &models.CAPool{
-		ProjectID: projectID,
-		ID:        opts.ID,
-	}
-
-	tx := s.db.Order("created_at")
-
-	var results []*models.CAPool
-	if tx := tx.Find(&results, w); tx.Error != nil {
-		return nil, errors.Wrap(gormx.ConvertSQLError(tx.Error), "listCAPool() failed")
-	}
-
-	return results, nil
-}
-
-func (s *sqlStoreImpl) CreateCA(ctx context.Context, projectID, caPoolID string, req *provider.CreateRequest, certPEM, keyPEM []byte, parentCAID *string) (*types.CertificateAuthority, error) {
-	log.Debugf("CreateCA: project=%s, capool=%s, req=%v, parent=%+v", projectID, caPoolID, req, parentCAID)
+func (s *sqlStoreImpl) CreateCA(ctx context.Context, projectID string, req *provider.CreateRequest, certPEM, keyPEM []byte, parentCAID *string) (*types.CertificateAuthority, error) {
+	log.Debugf("CreateCA: project=%s, req=%v, parent=%+v", projectID, req, parentCAID)
 	if parentCAID != nil {
 		log.Debugf("\tparentCA=%s", *parentCAID)
-		if _, err := s.GetCA(ctx, projectID, caPoolID, *parentCAID); err != nil {
+		if _, err := s.GetCA(ctx, projectID, *parentCAID); err != nil {
 			return nil, errors.Errorf("parent ca not found")
 		}
 	}
@@ -221,7 +139,6 @@ func (s *sqlStoreImpl) CreateCA(ctx context.Context, projectID, caPoolID string,
 
 	ca := &models.CertificateAuthority{
 		ProjectID: projectID,
-		CAPoolID:  caPoolID,
 		Request:   reqJSON,
 		Cert:      certPEM,
 		Key:       keyPEM,
@@ -232,15 +149,14 @@ func (s *sqlStoreImpl) CreateCA(ctx context.Context, projectID, caPoolID string,
 		return nil, gormx.ConvertSQLError(tx.Error)
 	}
 
-	return s.GetCA(ctx, projectID, caPoolID, ca.ID)
+	return s.GetCA(ctx, projectID, ca.ID)
 }
 
-func (s *sqlStoreImpl) ListCA(ctx context.Context, projectID, caPoolID string, opts CAListOpt) ([]*types.CertificateAuthority, error) {
-	log.Debugf("ListCA: project=%s, capool=%s, opts=%v", projectID, caPoolID, opts)
+func (s *sqlStoreImpl) ListCA(ctx context.Context, projectID string, opts CAListOpt) ([]*types.CertificateAuthority, error) {
+	log.Debugf("ListCA: project=%s,  opts=%v", projectID, opts)
 
 	w := &models.CertificateAuthority{
 		ProjectID: projectID,
-		CAPoolID:  caPoolID,
 		ID:        opts.ID,
 		Status:    opts.Status.String(),
 	}
@@ -263,7 +179,6 @@ func (s *sqlStoreImpl) ListCA(ctx context.Context, projectID, caPoolID string, o
 		return &types.CertificateAuthority{
 			ID:        cert.ID,
 			ProjectID: cert.ProjectID,
-			CAPoolID:  cert.CAPoolID,
 			Request:   string(cert.Request),
 			Cert:      cert.Cert,
 			Key:       cert.Key,
@@ -274,10 +189,10 @@ func (s *sqlStoreImpl) ListCA(ctx context.Context, projectID, caPoolID string, o
 	}), nil
 }
 
-func (s *sqlStoreImpl) GetCA(ctx context.Context, projectID, caPoolID, ID string) (*types.CertificateAuthority, error) {
-	log.Debugf("GetCA: project=%s, capool=%s, ID=%s", projectID, caPoolID, ID)
+func (s *sqlStoreImpl) GetCA(ctx context.Context, projectID, ID string) (*types.CertificateAuthority, error) {
+	log.Debugf("GetCA: project=%s, ID=%s", projectID, ID)
 
-	results, err := s.ListCA(ctx, projectID, caPoolID, CAListOpt{ID: ID})
+	results, err := s.ListCA(ctx, projectID, CAListOpt{ID: ID})
 	if err != nil {
 		return nil, errors.Wrap(err, "fail to get certificate authority")
 	}
@@ -292,7 +207,7 @@ func (s *sqlStoreImpl) GetCA(ctx context.Context, projectID, caPoolID, ID string
 	}
 }
 
-func (s *sqlStoreImpl) CreateCertificate(ctx context.Context, projectID, caPoolID string, req *provider.CreateRequest, certPEM, keyPEM, chainPEM []byte, parentCAID string) (ca *types.Certificate, err error) {
+func (s *sqlStoreImpl) CreateCertificate(ctx context.Context, projectID string, req *provider.CreateRequest, certPEM, keyPEM, chainPEM []byte, parentCAID string) (ca *types.Certificate, err error) {
 	if err := helper.ValidateVar(req, "required"); err != nil {
 		return nil, errors.Wrap(err, "fail to create certficiate")
 	}
@@ -309,7 +224,6 @@ func (s *sqlStoreImpl) CreateCertificate(ctx context.Context, projectID, caPoolI
 	cert := &models.Certificate{
 		CAID:      parentCAID,
 		ProjectID: projectID,
-		CAPoolID:  caPoolID,
 		Request:   reqJSON,
 		Cert:      certPEM,
 		Chain:     chainPEM,
@@ -322,11 +236,11 @@ func (s *sqlStoreImpl) CreateCertificate(ctx context.Context, projectID, caPoolI
 		return nil, gormx.ConvertSQLError(tx.Error)
 	}
 
-	return s.GetCertificate(ctx, projectID, caPoolID, cert.ID)
+	return s.GetCertificate(ctx, projectID, cert.ID)
 }
 
-func (s *sqlStoreImpl) GetCertificate(ctx context.Context, projectID, caPoolID, certID string) (*types.Certificate, error) {
-	results, err := s.ListCertificate(ctx, projectID, caPoolID, CertificateListOpt{ID: certID})
+func (s *sqlStoreImpl) GetCertificate(ctx context.Context, projectID string, certID string) (*types.Certificate, error) {
+	results, err := s.ListCertificate(ctx, projectID, CertificateListOpt{ID: certID})
 	if err != nil {
 		return nil, errors.Wrap(err, "fail to get certifciate")
 	}
@@ -341,8 +255,8 @@ func (s *sqlStoreImpl) GetCertificate(ctx context.Context, projectID, caPoolID, 
 	}
 }
 
-func (s *sqlStoreImpl) getCertificate(ctx context.Context, projectID, caPoolID, certID string) (*models.Certificate, error) {
-	results, err := s.listCertificate(ctx, projectID, caPoolID, CertificateListOpt{ID: certID})
+func (s *sqlStoreImpl) getCertificate(ctx context.Context, projectID string, certID string) (*models.Certificate, error) {
+	results, err := s.listCertificate(ctx, projectID, CertificateListOpt{ID: certID})
 	if err != nil {
 		return nil, errors.Wrap(err, "fail to get certifciate")
 	}
@@ -357,8 +271,8 @@ func (s *sqlStoreImpl) getCertificate(ctx context.Context, projectID, caPoolID, 
 	}
 }
 
-func (s *sqlStoreImpl) ListCertificate(ctx context.Context, projectID string, caPoolID string, opts CertificateListOpt) ([]*types.Certificate, error) {
-	results, err := s.listCertificate(ctx, projectID, caPoolID, opts)
+func (s *sqlStoreImpl) ListCertificate(ctx context.Context, projectID string, opts CertificateListOpt) ([]*types.Certificate, error) {
+	results, err := s.listCertificate(ctx, projectID, opts)
 	if err != nil {
 		return nil, errors.Wrap(err, "ListCertificate() failed")
 	}
@@ -368,7 +282,6 @@ func (s *sqlStoreImpl) ListCertificate(ctx context.Context, projectID string, ca
 			ID:            cert.ID,
 			CAID:          cert.CAID,
 			ProjectID:     cert.ProjectID,
-			CAPoolID:      cert.CAPoolID,
 			Request:       string(cert.Request),
 			Cert:          cert.Cert,
 			Key:           cert.Key,
@@ -383,13 +296,12 @@ func (s *sqlStoreImpl) ListCertificate(ctx context.Context, projectID string, ca
 	}), nil
 }
 
-func (s *sqlStoreImpl) listCertificate(ctx context.Context, projectID string, caPoolID string, opts CertificateListOpt) ([]*models.Certificate, error) {
+func (s *sqlStoreImpl) listCertificate(ctx context.Context, projectID string, opts CertificateListOpt) ([]*models.Certificate, error) {
 	log.Debugf("listCertificate(): opts=%+v", opts)
 
 	w := &models.Certificate{
 		ID:        opts.ID,
 		ProjectID: projectID,
-		CAPoolID:  caPoolID,
 		CN:        opts.CN,
 		Status:    opts.Status.String(),
 	}
@@ -405,10 +317,10 @@ func (s *sqlStoreImpl) listCertificate(ctx context.Context, projectID string, ca
 	return results, nil
 }
 
-func (s *sqlStoreImpl) RevokeCertificate(ctx context.Context, projectID string, caPoolID string, certID string, reason x509types.RevokeReason) error {
-	log.Debugf("RevokeCertificate(): project=%s, capool=%s, cert=%s", projectID, caPoolID, certID)
+func (s *sqlStoreImpl) RevokeCertificate(ctx context.Context, projectID string, certID string, reason x509types.RevokeReason) error {
+	log.Debugf("RevokeCertificate(): project=%s, cert=%s", projectID, certID)
 
-	cert, err := s.getCertificate(ctx, projectID, caPoolID, certID)
+	cert, err := s.getCertificate(ctx, projectID, certID)
 	if err != nil {
 		return errors.Wrap(err, "fail to revoke certificate")
 	}

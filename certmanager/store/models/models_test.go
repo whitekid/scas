@@ -22,12 +22,8 @@ func newFixture(t *testing.T, dbURL string) *fixture {
 	proj := &Project{Name: "test project"}
 	require.NoError(t, db.Create(proj).Error)
 
-	pool := &CAPool{Name: "test capool", ProjectID: proj.ID}
-	require.NoError(t, db.Create(pool).Error)
-
 	ca := &CertificateAuthority{
 		ProjectID: proj.ID,
-		CAPoolID:  pool.ID,
 		Status:    "active",
 	}
 	require.NoError(t, db.Create(ca).Error)
@@ -35,7 +31,6 @@ func newFixture(t *testing.T, dbURL string) *fixture {
 	return &fixture{
 		DB:   db,
 		proj: proj,
-		pool: pool,
 		ca:   ca,
 	}
 }
@@ -43,7 +38,6 @@ func newFixture(t *testing.T, dbURL string) *fixture {
 type fixture struct {
 	*gorm.DB
 	proj *Project
-	pool *CAPool
 	ca   *CertificateAuthority
 }
 
@@ -61,25 +55,12 @@ func TestProject(t *testing.T) {
 	})
 }
 
-func TestCAPool(t *testing.T) {
-	testutils.ForEachSQLDriver(t, func(t *testing.T, dbURL string, reset func()) {
-		fixture := newFixture(t, dbURL)
-
-		pool := &CAPool{Name: "pool", ProjectID: fixture.proj.ID}
-		require.NoError(t, fixture.Create(pool).Error)
-
-		var got CAPool
-		require.NoError(t, fixture.First(&got, "id = ?", pool.ID).Error)
-	})
-}
-
 func TestCertificateAuthority(t *testing.T) {
 	testutils.ForEachSQLDriver(t, func(t *testing.T, dbURL string, reset func()) {
 		fixture := newFixture(t, dbURL)
 
 		ca := &CertificateAuthority{
 			ProjectID: fixture.proj.ID,
-			CAPoolID:  fixture.pool.ID,
 			Status:    "valid",
 		}
 		require.NoError(t, fixture.Create(ca).Error)
@@ -95,7 +76,6 @@ func TestCertificate(t *testing.T) {
 
 		cert := &Certificate{
 			ProjectID: fixture.proj.ID,
-			CAPoolID:  fixture.pool.ID,
 			CAID:      fixture.ca.ID,
 			Status:    "valid",
 		}
