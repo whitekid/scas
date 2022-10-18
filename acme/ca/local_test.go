@@ -6,7 +6,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/whitekid/goxp/fx"
 
+	"scas/client/common/x509types"
 	"scas/pkg/helper/x509x"
 )
 
@@ -19,11 +21,14 @@ func Test_localImpl_CreateCertificate(t *testing.T) {
 		args    args
 		wantErr bool
 	}{
+		{"key algo", args{&CreateRequest{
+			Subject:            pkix.Name{CommonName: "hello.example.com"},
+			KeyAlgorithm:       x509types.ECDSA_P384,
+			SignatureAlgorithm: x509types.ECDSA_P512,
+		}}, false},
 		{"valid", args{&CreateRequest{
-			SerialNumber: x509x.RandomSerial(),
-			Subject: pkix.Name{
-				CommonName: "hello.example.com",
-			},
+			Subject:      pkix.Name{CommonName: "hello.example.com"},
+			KeyAlgorithm: x509types.RSA_2048,
 		}}, false},
 	}
 	for _, tt := range tests {
@@ -40,12 +45,17 @@ func Test_localImpl_CreateCertificate(t *testing.T) {
 
 			cert, err := x509x.ParseCertificate(got)
 			require.NoError(t, err)
-			require.Equal(t, tt.args.req.SerialNumber, cert.SerialNumber)
+			if tt.args.req.SerialNumber != nil {
+				require.Equal(t, tt.args.req.SerialNumber, cert.SerialNumber)
+			}
 			require.Equal(t, tt.args.req.Subject.CommonName, cert.Subject.CommonName)
+
+			sigAlgo := fx.Ternary(tt.args.req.SignatureAlgorithm == x509types.KeyUnknown, tt.args.req.KeyAlgorithm, tt.args.req.SignatureAlgorithm)
+			require.Equal(t, sigAlgo.ToX509SignatureAlgorithm().String(), cert.SignatureAlgorithm.String())
 
 			priv, err := x509x.ParsePrivateKey(key)
 			require.NoError(t, err)
-			_ = priv
+			require.Equal(t, tt.args.req.KeyAlgorithm.ToX509SignatureAlgorithm().String(), x509x.PrivateKeyAlgorithm(priv).String())
 
 			require.Empty(t, chain)
 		})

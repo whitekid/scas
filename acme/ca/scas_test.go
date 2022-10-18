@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.com/whitekid/goxp/fx"
 
 	"scas/api/v1alpha1"
 	"scas/certmanager"
@@ -50,8 +51,8 @@ func TestSCAS(t *testing.T) {
 		proj, err := fixture.client.Projects("").Create(ctx, &scasclient.Project{Name: "test project"})
 		require.NoError(t, err)
 
-		// create root ca
-		ca, err := fixture.client.Projects(proj.ID).CA().Create(ctx, &scasclient.CertificateRequest{
+		// create root rootCA
+		rootCA, err := fixture.client.Projects(proj.ID).CA().Create(ctx, &scasclient.CertificateRequest{
 			CommonName:   "root CA",
 			KeyAlgorithm: x509types.ECDSA_P256,
 			KeyUsage:     x509types.RootCAKeyUsage,
@@ -61,20 +62,19 @@ func TestSCAS(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		subCa, err := fixture.client.Projects(proj.ID).CA().Create(ctx, &scasclient.CertificateRequest{
+		ca, err := fixture.client.Projects(proj.ID).CA().Create(ctx, &scasclient.CertificateRequest{
 			CommonName:   "Subordinate CA",
 			KeyAlgorithm: x509types.ECDSA_P256,
 			KeyUsage:     x509types.SubCAKeyUsage,
 			ExtKeyUsage:  x509types.SubCAExtKeyUsage,
 			NotAfter:     helper.AfterNow(3, 0, 0),
 			NotBefore:    helper.AfterNow(0, -1, 0),
-			CAID:         ca.ID,
+			CAID:         rootCA.ID,
 		})
 		require.NoError(t, err)
 
-		scas := NewSCAS(fixture.url, proj.ID, subCa.ID).(*scasImpl)
+		scas := NewSCAS(fixture.url, proj.ID, ca.ID).(*scasImpl)
 		req := &CreateRequest{
-			SerialNumber: x509x.RandomSerial(),
 			// TODO Issuer
 			// TODO CAID
 			KeyAlgorithm: x509types.ECDSA_P256,
@@ -98,8 +98,12 @@ func TestSCAS(t *testing.T) {
 		x509cert, err := x509x.ParseCertificate(certPEM)
 		require.NoError(t, err)
 
-		require.Equal(t, req.SerialNumber, x509cert.SerialNumber)
-		require.Equal(t, req.KeyAlgorithm.ToX509SignatureAlgorithm(), x509cert.SignatureAlgorithm)
+		if req.SerialNumber != nil {
+			require.Equal(t, req.SerialNumber, x509cert.SerialNumber)
+		}
+		require.Equal(t, req.KeyAlgorithm.ToX509SignatureAlgorithm().String(), x509cert.SignatureAlgorithm.String())
+		sigAlgo := fx.Ternary(req.SignatureAlgorithm == x509types.KeyUnknown, req.KeyAlgorithm, req.KeyAlgorithm)
+		require.Equal(t, sigAlgo.ToX509SignatureAlgorithm().String(), x509cert.SignatureAlgorithm.String())
 		require.Equal(t, req.Subject.CommonName, x509cert.Subject.CommonName)
 		require.Equal(t, req.DNSNames, x509cert.DNSNames)
 		require.Equal(t, req.NotAfter, x509cert.NotAfter, "NotAfter mismatch")

@@ -6,7 +6,10 @@ import (
 	"crypto/x509"
 
 	"github.com/pkg/errors"
+	"github.com/whitekid/goxp/fx"
 
+	"scas/client/common/x509types"
+	"scas/pkg/helper"
 	"scas/pkg/helper/x509x"
 )
 
@@ -22,14 +25,19 @@ type localImpl struct {
 var _ Interface = (*localImpl)(nil)
 
 func (loc *localImpl) CreateCertificate(ctx context.Context, in *CreateRequest) ([]byte, []byte, []byte, error) {
-	privKey, err := x509x.GenerateKey(x509.ECDSAWithSHA256)
+	if err := helper.ValidateStruct(in); err != nil {
+		return nil, nil, nil, err
+	}
+
+	privKey, err := x509x.GenerateKey(in.KeyAlgorithm.ToX509SignatureAlgorithm())
 	if err != nil {
 		return nil, nil, nil, errors.Wrap(err, "fail to create certificate")
 	}
 	parentPrivKey := privKey
 
 	template := &x509.Certificate{
-		SerialNumber:          in.SerialNumber,
+		SignatureAlgorithm:    fx.Ternary(in.SignatureAlgorithm == x509types.KeyUnknown, in.KeyAlgorithm.ToX509SignatureAlgorithm(), in.SignatureAlgorithm.ToX509SignatureAlgorithm()),
+		SerialNumber:          fx.Ternary(in.SerialNumber == nil, x509x.RandomSerial(), in.SerialNumber),
 		Subject:               in.Subject,
 		Issuer:                in.Issuer,
 		DNSNames:              in.DNSNames,

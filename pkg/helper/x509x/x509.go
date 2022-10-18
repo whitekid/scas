@@ -39,8 +39,6 @@ var (
 	pemPrefixPkcs8PrivateKey = []byte(pemPrefix + Pkcs8PrivateKeyPEMBlockType)
 )
 
-var randReader = rand.Reader
-
 // ParseCertificate parse x509 certificate PEM block or DER bytes
 func ParseCertificate(certBytes []byte) (*x509.Certificate, error) {
 	if bytes.HasPrefix(certBytes, pemPrefixCertificate) {
@@ -106,21 +104,21 @@ type PublicKey interface {
 func GenerateKey(algorithm x509.SignatureAlgorithm) (privateKey PrivateKey, err error) {
 	switch algorithm {
 	case x509.ECDSAWithSHA256:
-		privateKey, err = ecdsa.GenerateKey(elliptic.P256(), randReader)
+		privateKey, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	case x509.ECDSAWithSHA384:
-		privateKey, err = ecdsa.GenerateKey(elliptic.P384(), randReader)
+		privateKey, err = ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
 	case x509.ECDSAWithSHA512:
-		privateKey, err = ecdsa.GenerateKey(elliptic.P521(), randReader)
+		privateKey, err = ecdsa.GenerateKey(elliptic.P521(), rand.Reader)
 	case x509.PureEd25519:
-		_, privateKey, err = ed25519.GenerateKey(randReader)
+		_, privateKey, err = ed25519.GenerateKey(rand.Reader)
 	case x509.SHA256WithRSA:
-		privateKey, err = rsa.GenerateKey(randReader, 256*8)
+		privateKey, err = rsa.GenerateKey(rand.Reader, 256*8)
 	case x509.SHA384WithRSA:
-		privateKey, err = rsa.GenerateKey(randReader, 384*8)
+		privateKey, err = rsa.GenerateKey(rand.Reader, 384*8)
 	case x509.SHA512WithRSA:
-		privateKey, err = rsa.GenerateKey(randReader, 512*8)
+		privateKey, err = rsa.GenerateKey(rand.Reader, 512*8)
 	default:
-		return nil, errors.Errorf("unknown algorithm: %s", algorithm)
+		return nil, errors.Errorf("unknown algorithm: %s", algorithm.String())
 	}
 
 	if err != nil {
@@ -147,13 +145,35 @@ func ParsePrivateKey(keyPemBytes []byte) (PrivateKey, error) {
 		key, err = x509.ParseECPrivateKey(p.Bytes)
 
 	default:
-		return nil, errors.New("Unknown pem type")
+		return nil, errors.New("unknown pem type")
 	}
 
 	if err != nil {
 		return nil, errors.Wrap(err, "fail to parse private key")
 	}
 	return key, nil
+}
+
+// PrivateKeyAlgorithm return private key algorithm
+func PrivateKeyAlgorithm(priv PrivateKey) x509.SignatureAlgorithm {
+	switch p := priv.(type) {
+	case *ecdsa.PrivateKey:
+		return map[int]x509.SignatureAlgorithm{
+			256: x509.ECDSAWithSHA256,
+			384: x509.ECDSAWithSHA384,
+			512: x509.ECDSAWithSHA512,
+		}[p.Params().BitSize]
+	case *rsa.PrivateKey:
+		return map[int]x509.SignatureAlgorithm{
+			256: x509.SHA256WithRSA,
+			384: x509.SHA384WithRSA,
+			512: x509.SHA512WithRSA,
+		}[p.Size()]
+	case *ed25519.PrivateKey:
+		return x509.PureEd25519
+	}
+
+	return x509.UnknownSignatureAlgorithm
 }
 
 // CreateCertificateRequest create CSR and return PEM
@@ -164,7 +184,7 @@ func CreateCertificateRequest(template *x509.CertificateRequest) (csr []byte, pe
 		return nil, nil, err
 	}
 
-	derBytes, err := x509.CreateCertificateRequest(randReader, template, privKey)
+	derBytes, err := x509.CreateCertificateRequest(rand.Reader, template, privKey)
 	if err != nil {
 		return nil, nil, err
 	}
