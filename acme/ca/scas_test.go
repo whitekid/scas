@@ -2,6 +2,7 @@ package ca
 
 import (
 	"context"
+	"crypto/x509"
 	"crypto/x509/pkix"
 	"net/http/httptest"
 	"testing"
@@ -54,9 +55,9 @@ func TestSCAS(t *testing.T) {
 		// create root rootCA
 		rootCA, err := fixture.client.Projects(proj.ID).CA().Create(ctx, &scasclient.CertificateRequest{
 			CommonName:   "root CA",
-			KeyAlgorithm: x509types.ECDSA_P256,
-			KeyUsage:     x509types.RootCAKeyUsage,
-			ExtKeyUsage:  x509types.RootCAExtKeyUsage,
+			KeyAlgorithm: x509.ECDSAWithSHA256,
+			KeyUsage:     x509types.KeyUsageRootCA,
+			ExtKeyUsage:  x509types.ExtKeyUsageRootCA,
 			NotAfter:     helper.AfterNow(5, 1, 0).Truncate(time.Minute),
 			NotBefore:    helper.AfterNow(0, -1, 0).Truncate(time.Minute),
 		})
@@ -64,9 +65,9 @@ func TestSCAS(t *testing.T) {
 
 		ca, err := fixture.client.Projects(proj.ID).CA().Create(ctx, &scasclient.CertificateRequest{
 			CommonName:   "Subordinate CA",
-			KeyAlgorithm: x509types.ECDSA_P256,
-			KeyUsage:     x509types.SubCAKeyUsage,
-			ExtKeyUsage:  x509types.SubCAExtKeyUsage,
+			KeyAlgorithm: x509.ECDSAWithSHA256,
+			KeyUsage:     x509types.KeyUsageSubCA,
+			ExtKeyUsage:  x509types.ExtKeyUsageSubCA,
 			NotAfter:     helper.AfterNow(3, 0, 0),
 			NotBefore:    helper.AfterNow(0, -1, 0),
 			CAID:         rootCA.ID,
@@ -77,15 +78,15 @@ func TestSCAS(t *testing.T) {
 		req := &CreateRequest{
 			// TODO Issuer
 			// TODO CAID
-			KeyAlgorithm: x509types.ECDSA_P256,
+			KeyAlgorithm: x509.ECDSAWithSHA256,
 			Subject: pkix.Name{
 				CommonName: "test.charlie.127.0.0.1.sslip.io",
 			},
 			DNSNames:    []string{"test.charlie.127.0.0.1.sslip.io"},
 			NotAfter:    helper.AfterNow(1, 0, 0),
 			NotBefore:   helper.AfterNow(0, -1, 0),
-			KeyUsage:    x509types.ServerKeyUsage,
-			ExtKeyUsage: x509types.ServerExtKeyUsage,
+			KeyUsage:    x509types.KeyUsageServer,
+			ExtKeyUsage: x509types.ExtKeyUsageServer,
 		}
 		certPEM, keyPEM, chainPEM, err := scas.CreateCertificate(ctx, req)
 		require.NoError(t, err)
@@ -101,9 +102,9 @@ func TestSCAS(t *testing.T) {
 		if req.SerialNumber != nil {
 			require.Equal(t, req.SerialNumber, x509cert.SerialNumber)
 		}
-		require.Equal(t, req.KeyAlgorithm.ToX509SignatureAlgorithm().String(), x509cert.SignatureAlgorithm.String())
-		sigAlgo := fx.Ternary(req.SignatureAlgorithm == x509types.KeyUnknown, req.KeyAlgorithm, req.KeyAlgorithm)
-		require.Equal(t, sigAlgo.ToX509SignatureAlgorithm().String(), x509cert.SignatureAlgorithm.String())
+		require.Equal(t, req.KeyAlgorithm.String(), x509cert.SignatureAlgorithm.String())
+		sigAlgo := fx.Ternary(req.SignatureAlgorithm == x509.UnknownSignatureAlgorithm, req.KeyAlgorithm, req.KeyAlgorithm)
+		require.Equal(t, sigAlgo.String(), x509cert.SignatureAlgorithm.String())
 		require.Equal(t, req.Subject.CommonName, x509cert.Subject.CommonName)
 		require.Equal(t, req.DNSNames, x509cert.DNSNames)
 		require.Equal(t, req.NotAfter, x509cert.NotAfter, "NotAfter mismatch")

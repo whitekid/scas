@@ -109,14 +109,14 @@ func GenerateKey(algorithm x509.SignatureAlgorithm) (privateKey PrivateKey, err 
 		privateKey, err = ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
 	case x509.ECDSAWithSHA512:
 		privateKey, err = ecdsa.GenerateKey(elliptic.P521(), rand.Reader)
-	case x509.PureEd25519:
-		_, privateKey, err = ed25519.GenerateKey(rand.Reader)
 	case x509.SHA256WithRSA:
 		privateKey, err = rsa.GenerateKey(rand.Reader, 256*8)
 	case x509.SHA384WithRSA:
 		privateKey, err = rsa.GenerateKey(rand.Reader, 384*8)
 	case x509.SHA512WithRSA:
 		privateKey, err = rsa.GenerateKey(rand.Reader, 512*8)
+	case x509.PureEd25519:
+		_, privateKey, err = ed25519.GenerateKey(rand.Reader)
 	default:
 		return nil, errors.Errorf("unknown algorithm: %s", algorithm.String())
 	}
@@ -161,7 +161,7 @@ func PrivateKeyAlgorithm(priv PrivateKey) x509.SignatureAlgorithm {
 		return map[int]x509.SignatureAlgorithm{
 			256: x509.ECDSAWithSHA256,
 			384: x509.ECDSAWithSHA384,
-			512: x509.ECDSAWithSHA512,
+			521: x509.ECDSAWithSHA512,
 		}[p.Params().BitSize]
 	case *rsa.PrivateKey:
 		return map[int]x509.SignatureAlgorithm{
@@ -169,7 +169,7 @@ func PrivateKeyAlgorithm(priv PrivateKey) x509.SignatureAlgorithm {
 			384: x509.SHA384WithRSA,
 			512: x509.SHA512WithRSA,
 		}[p.Size()]
-	case *ed25519.PrivateKey:
+	case ed25519.PrivateKey:
 		return x509.PureEd25519
 	}
 
@@ -301,4 +301,29 @@ func VerifySignature(pub PublicKey, hash []byte, signature []byte) bool {
 		log.Fatalf("unsupported public key: %T", pub)
 		return false
 	}
+}
+
+var (
+	unsupportedAlgorithm = []x509.SignatureAlgorithm{x509.MD2WithRSA, x509.MD5WithRSA, x509.SHA1WithRSA}
+	leafAlgorithms       = []x509.SignatureAlgorithm{x509.SHA256WithRSA, x509.SHA384WithRSA, x509.SHA512WithRSA, x509.ECDSAWithSHA256, x509.ECDSAWithSHA384, x509.ECDSAWithSHA512, x509.PureEd25519}
+)
+
+// ValidCertificateAlgorithm check
+func ValidCertificateAlgorithm(isCA bool, keyAlgorithm x509.SignatureAlgorithm, signatureAlgorithm x509.SignatureAlgorithm) error {
+	// unsupported
+	if fx.Contains(unsupportedAlgorithm, keyAlgorithm) || fx.Contains(unsupportedAlgorithm, signatureAlgorithm) {
+		return errors.Errorf("invalid algorithm: %s", keyAlgorithm.String())
+	}
+
+	if !isCA {
+		if !fx.Contains(leafAlgorithms, keyAlgorithm) {
+			return errors.Errorf("invalid key algorithm: %s", keyAlgorithm.String())
+		}
+
+		if signatureAlgorithm != x509.UnknownSignatureAlgorithm && !fx.Contains(leafAlgorithms, keyAlgorithm) {
+			return errors.Errorf("invalid signature algorithm: %s", signatureAlgorithm.String())
+		}
+	}
+
+	return nil
 }

@@ -144,6 +144,7 @@ func (m *Manager) FinalizeOrder(ctx context.Context, orderID string, csr *x509.C
 	// TODO private key를 어디선가 써야하겠지?
 	certPEM, _, chainPEM, err := caIntf.CreateCertificate(ctx, &ca.CreateRequest{
 		SerialNumber: serial,
+		KeyAlgorithm: x509.ECDSAWithSHA256, // TODO 이건 어디서 가져올까요?
 		Subject:      csr.Subject,
 		Issuer: pkix.Name{
 			CommonName:         proj.CommonName,

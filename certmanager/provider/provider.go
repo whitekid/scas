@@ -12,7 +12,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/whitekid/goxp/fx"
 
-	"scas/client/common/x509types"
 	"scas/pkg/helper"
 	"scas/pkg/helper/x509x"
 )
@@ -32,8 +31,8 @@ type CreateRequest struct {
 	Country, Organization, OrganizationalUnit string
 	Locality, Province                        string
 	StreetAddress, PostalCode                 string
-	KeyAlgorithm                              x509types.SignatureAlgorithm `validate:"required"`
-	SignatureAlgorithm                        x509types.SignatureAlgorithm
+	KeyAlgorithm                              x509.SignatureAlgorithm `validate:"required"`
+	SignatureAlgorithm                        x509.SignatureAlgorithm
 	IsCA                                      bool
 	KeyUsage                                  x509.KeyUsage
 	ExtKeyUsage                               []x509.ExtKeyUsage
@@ -49,7 +48,7 @@ func (req *CreateRequest) Template() (*x509.Certificate, error) {
 	}
 
 	template := &x509.Certificate{
-		SignatureAlgorithm: fx.Ternary(req.SignatureAlgorithm == x509types.KeyUnknown, req.KeyAlgorithm.ToX509SignatureAlgorithm(), req.KeyAlgorithm.ToX509SignatureAlgorithm()),
+		SignatureAlgorithm: req.SignatureAlgorithm,
 		SerialNumber:       fx.Ternary(req.SerialNumber == nil, x509x.RandomSerial(), req.SerialNumber),
 		Subject: pkix.Name{
 			CommonName:         req.CommonName,

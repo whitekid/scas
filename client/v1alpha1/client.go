@@ -123,8 +123,8 @@ type CertificateRequest struct {
 
 	Hosts []string `json:",omitempty"` // DNS Name and IP Addresse
 
-	KeyAlgorithm       x509types.SignatureAlgorithm `json:",omitempty" validate:"required"`
-	SignatureAlgorithm x509types.SignatureAlgorithm `json:",omitempty"`
+	KeyAlgorithm       x509.SignatureAlgorithm `json:",omitempty" validate:"required"`
+	SignatureAlgorithm x509.SignatureAlgorithm `json:",omitempty"`
 	KeyUsage           x509.KeyUsage
 	ExtKeyUsage        []x509.ExtKeyUsage
 	NotAfter           time.Time `json:",omitempty" validate:"required"`

@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"crypto/x509"
 	"testing"
 
 	"github.com/pkg/errors"
@@ -12,7 +13,6 @@ import (
 	"scas/certmanager/provider"
 	"scas/certmanager/store/models"
 	"scas/client/common"
-	"scas/client/common/x509types"
 	"scas/pkg/helper"
 	"scas/pkg/testutils"
 )
@@ -52,14 +52,14 @@ func newSQL(ctx context.Context, t *testing.T, dburl string) *testSQL {
 	subCA := testutils.Must1(s.CreateCA(ctx, project.ID, nil, nil, nil, &rootCA.ID))
 	testutils.Must1(s.CreateCertificate(ctx, project.ID, &provider.CreateRequest{
 		CommonName:   "server.example.com",
-		KeyAlgorithm: x509types.ECDSA_P384,
+		KeyAlgorithm: x509.ECDSAWithSHA384,
 		NotAfter:     helper.AfterNow(1, 0, 0),
 		NotBefore:    helper.AfterNow(0, -1, 0),
 	}, nil, nil, nil, subCA.ID))
 
 	cert := testutils.Must1(s.CreateCertificate(ctx, project.ID, &provider.CreateRequest{
 		CommonName:   "invalid.example.com",
-		KeyAlgorithm: x509types.ECDSA_P256,
+		KeyAlgorithm: x509.ECDSAWithSHA256,
 		NotAfter:     helper.AfterNow(1, 0, 0),
 		NotBefore:    helper.AfterNow(0, -1, 0),
 	}, nil, nil, nil, subCA.ID))

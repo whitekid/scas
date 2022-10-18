@@ -45,7 +45,7 @@ func testRepository(t *testing.T, dbURL string, resetFixture func()) {
 	// create root ca
 	rootCA, err := repo.CreateCertificateAuthority(ctx, project.ID, &provider.CreateRequest{
 		CommonName:   testRootCACN,
-		KeyAlgorithm: x509types.ECDSA_P384,
+		KeyAlgorithm: x509.ECDSAWithSHA384,
 		IsCA:         true,
 		NotAfter:     helper.AfterNow(5, 0, 0),
 		NotBefore:    helper.AfterNow(0, -1, 0),
@@ -56,7 +56,7 @@ func testRepository(t *testing.T, dbURL string, resetFixture func()) {
 	// create subordinate ca
 	subCA, err := repo.CreateCertificateAuthority(ctx, project.ID, &provider.CreateRequest{
 		CommonName:   testSubCACN,
-		KeyAlgorithm: x509types.ECDSA_P256,
+		KeyAlgorithm: x509.ECDSAWithSHA256,
 		IsCA:         true,
 		Hosts:        []string{testCAHosts},
 		NotAfter:     helper.AfterNow(3, 0, 0),
@@ -67,7 +67,7 @@ func testRepository(t *testing.T, dbURL string, resetFixture func()) {
 
 	serverCert, err := repo.CreateCertificate(ctx, project.ID, &provider.CreateRequest{
 		CommonName:   testServerCN,
-		KeyAlgorithm: x509types.RSA_4096,
+		KeyAlgorithm: x509.SHA512WithRSA,
 		Hosts:        []string{testServerCN}, // server cn is dns name
 		NotAfter:     helper.AfterNow(1, 0, 0),
 		NotBefore:    helper.AfterNow(0, -1, 0),

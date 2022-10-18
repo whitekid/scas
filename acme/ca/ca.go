@@ -8,8 +8,6 @@ import (
 	"net"
 	"net/url"
 	"time"
-
-	"scas/client/common/x509types"
 )
 
 type Interface interface {
@@ -23,8 +21,8 @@ type Interface interface {
 // CreateRequest certificate create request
 type CreateRequest struct {
 	SerialNumber       *big.Int
-	KeyAlgorithm       x509types.SignatureAlgorithm `validate:"required"`
-	SignatureAlgorithm x509types.SignatureAlgorithm
+	KeyAlgorithm       x509.SignatureAlgorithm `validate:"required"`
+	SignatureAlgorithm x509.SignatureAlgorithm
 	Subject            pkix.Name
 	Issuer             pkix.Name
 	DNSNames           []string

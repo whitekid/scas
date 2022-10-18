@@ -8,7 +8,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/whitekid/goxp/fx"
 
-	"scas/client/common/x509types"
 	"scas/pkg/helper"
 	"scas/pkg/helper/x509x"
 )
@@ -29,14 +28,14 @@ func (loc *localImpl) CreateCertificate(ctx context.Context, in *CreateRequest) 
 		return nil, nil, nil, err
 	}
 
-	privKey, err := x509x.GenerateKey(in.KeyAlgorithm.ToX509SignatureAlgorithm())
+	privKey, err := x509x.GenerateKey(in.KeyAlgorithm)
 	if err != nil {
 		return nil, nil, nil, errors.Wrap(err, "fail to create certificate")
 	}
 	parentPrivKey := privKey
 
 	template := &x509.Certificate{
-		SignatureAlgorithm:    fx.Ternary(in.SignatureAlgorithm == x509types.KeyUnknown, in.KeyAlgorithm.ToX509SignatureAlgorithm(), in.SignatureAlgorithm.ToX509SignatureAlgorithm()),
+		SignatureAlgorithm:    fx.Ternary(in.SignatureAlgorithm == x509.UnknownSignatureAlgorithm, in.KeyAlgorithm, in.SignatureAlgorithm),
 		SerialNumber:          fx.Ternary(in.SerialNumber == nil, x509x.RandomSerial(), in.SerialNumber),
 		Subject:               in.Subject,
 		Issuer:                in.Issuer,
