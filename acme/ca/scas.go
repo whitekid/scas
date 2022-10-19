@@ -2,10 +2,8 @@ package ca
 
 import (
 	"context"
-	"net"
 
 	"github.com/pkg/errors"
-	"github.com/whitekid/goxp/fx"
 	"github.com/whitekid/goxp/log"
 
 	"scas/client/v1alpha1"
@@ -34,14 +32,14 @@ func (s *scasImpl) CreateCertificate(ctx context.Context, in *CreateRequest) ([]
 		SerialNumber:       in.SerialNumber,
 		CAID:               s.caID,
 		CommonName:         in.Subject.CommonName,
-		Country:            fx.TernaryCF(len(in.Subject.Country) > 0, func() string { return in.Subject.Country[0] }, func() string { return "" }),
-		Province:           fx.TernaryCF(len(in.Subject.Province) > 0, func() string { return in.Subject.Province[0] }, func() string { return "" }),
-		Locality:           fx.TernaryCF(len(in.Subject.Locality) > 0, func() string { return in.Subject.Locality[0] }, func() string { return "" }),
-		StreetAddress:      fx.TernaryCF(len(in.Subject.StreetAddress) > 0, func() string { return in.Subject.StreetAddress[0] }, func() string { return "" }),
-		PostalCode:         fx.TernaryCF(len(in.Subject.PostalCode) > 0, func() string { return in.Subject.PostalCode[0] }, func() string { return "" }),
-		Organization:       fx.TernaryCF(len(in.Subject.Organization) > 0, func() string { return in.Subject.Organization[0] }, func() string { return "" }),
-		OrganizationalUnit: fx.TernaryCF(len(in.Subject.OrganizationalUnit) > 0, func() string { return in.Subject.OrganizationalUnit[0] }, func() string { return "" }),
-		Hosts:              append(append(in.DNSNames, in.EmailAddresses...), fx.Map(in.IPAddresses, func(ip net.IP) string { return ip.String() })...),
+		Country:            in.Subject.Country,
+		Province:           in.Subject.Province,
+		Locality:           in.Subject.Locality,
+		StreetAddress:      in.Subject.StreetAddress,
+		PostalCode:         in.Subject.PostalCode,
+		Organization:       in.Subject.Organization,
+		OrganizationalUnit: in.Subject.OrganizationalUnit,
+		Hosts:              in.Hosts,
 		KeyAlgorithm:       in.KeyAlgorithm,
 		KeyUsage:           in.KeyUsage,
 		ExtKeyUsage:        in.ExtKeyUsage,

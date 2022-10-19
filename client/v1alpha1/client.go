@@ -113,13 +113,13 @@ type CertificateRequest struct {
 	CommonName   string   `json:",omitempty" validate:"required"` // Common Name
 
 	// Names; some part of pkix.Name
-	Country            string `json:",omitempty"`
-	Province           string `json:",omitempty"` // State or Province
-	Locality           string `json:",omitempty"`
-	StreetAddress      string `json:",omitempty"`
-	PostalCode         string `json:",omitempty"`
-	Organization       string `json:",omitempty"` // Organization Name
-	OrganizationalUnit string `json:",omitempty"` // Organization Unit Name
+	Country            []string `json:",omitempty"`
+	Province           []string `json:",omitempty"` // State or Province
+	Locality           []string `json:",omitempty"`
+	StreetAddress      []string `json:",omitempty"`
+	PostalCode         []string `json:",omitempty"`
+	Organization       []string `json:",omitempty"` // Organization Name
+	OrganizationalUnit []string `json:",omitempty"` // Organization Unit Name
 
 	Hosts []string `json:",omitempty"` // DNS Name and IP Addresse
 

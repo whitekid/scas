@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/x509"
+	"net"
+	"net/mail"
 
 	"github.com/pkg/errors"
 	"github.com/whitekid/goxp/fx"
@@ -39,9 +41,6 @@ func (loc *localImpl) CreateCertificate(ctx context.Context, in *CreateRequest) 
 		SerialNumber:          fx.Ternary(in.SerialNumber == nil, x509x.RandomSerial(), in.SerialNumber),
 		Subject:               in.Subject,
 		Issuer:                in.Issuer,
-		DNSNames:              in.DNSNames,
-		EmailAddresses:        in.EmailAddresses,
-		IPAddresses:           in.IPAddresses,
 		URIs:                  in.URIs,
 		NotBefore:             in.NotBefore,
 		NotAfter:              in.NotAfter,
@@ -52,6 +51,17 @@ func (loc *localImpl) CreateCertificate(ctx context.Context, in *CreateRequest) 
 		IsCA:                  false,
 		BasicConstraintsValid: false,
 	}
+
+	for _, s := range in.Hosts {
+		if ip := net.ParseIP(s); ip != nil {
+			template.IPAddresses = append(template.IPAddresses, ip)
+		} else if m, err := mail.ParseAddress(s); err == nil {
+			template.EmailAddresses = append(template.EmailAddresses, m.Address)
+		} else {
+			template.DNSNames = append(template.DNSNames, s)
+		}
+	}
+
 	parent := template
 
 	certDer, err := x509.CreateCertificate(rand.Reader, template, parent, privKey.Public(), parentPrivKey)

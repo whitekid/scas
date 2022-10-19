@@ -82,7 +82,7 @@ func TestSCAS(t *testing.T) {
 			Subject: pkix.Name{
 				CommonName: "test.charlie.127.0.0.1.sslip.io",
 			},
-			DNSNames:    []string{"test.charlie.127.0.0.1.sslip.io"},
+			Hosts:       []string{"test.charlie.127.0.0.1.sslip.io"},
 			NotAfter:    helper.AfterNow(1, 0, 0),
 			NotBefore:   helper.AfterNow(0, -1, 0),
 			KeyUsage:    x509types.KeyUsageServer,
@@ -106,7 +106,7 @@ func TestSCAS(t *testing.T) {
 		sigAlgo := fx.Ternary(req.SignatureAlgorithm == x509.UnknownSignatureAlgorithm, req.KeyAlgorithm, req.KeyAlgorithm)
 		require.Equal(t, sigAlgo.String(), x509cert.SignatureAlgorithm.String())
 		require.Equal(t, req.Subject.CommonName, x509cert.Subject.CommonName)
-		require.Equal(t, req.DNSNames, x509cert.DNSNames)
+		require.Equal(t, req.Hosts, x509cert.DNSNames)
 		require.Equal(t, req.NotAfter, x509cert.NotAfter, "NotAfter mismatch")
 		require.Equal(t, req.NotBefore, x509cert.NotBefore, "NotBefore mistmatch")
 		require.Equal(t, req.KeyUsage, x509cert.KeyUsage)

@@ -5,7 +5,6 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"math/big"
-	"net"
 	"net/url"
 	"time"
 )
@@ -25,9 +24,7 @@ type CreateRequest struct {
 	SignatureAlgorithm x509.SignatureAlgorithm
 	Subject            pkix.Name
 	Issuer             pkix.Name
-	DNSNames           []string
-	EmailAddresses     []string
-	IPAddresses        []net.IP
+	Hosts              []string
 	URIs               []*url.URL
 	NotBefore          time.Time
 	NotAfter           time.Time
