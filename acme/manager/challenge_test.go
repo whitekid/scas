@@ -30,9 +30,15 @@ type Fixture struct {
 	challenge *store.Challenge
 }
 
-func setupFixture(ctx context.Context, t *testing.T) *Fixture {
+type fixtureOpts struct {
+	noCleanup bool
+}
+
+func setupFixture(ctx context.Context, t *testing.T, opts fixtureOpts) *Fixture {
 	dbname := testutils.DBName(t.Name())
-	os.Remove(dbname + ".db")
+	if !opts.noCleanup {
+		os.Remove(dbname + ".db")
+	}
 
 	s := store.NewSQLStore("sqlite://" + dbname + ".db")
 
@@ -118,7 +124,7 @@ func TestChallenger(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			s := setupFixture(ctx, t)
+			s := setupFixture(ctx, t, fixtureOpts{})
 
 			m := New(s.Interface)
 			challenger := newChallenger(m, s.Interface)
@@ -176,7 +182,7 @@ func TestChallengeRetry(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			s := setupFixture(ctx, t)
+			s := setupFixture(ctx, t, fixtureOpts{})
 
 			m := New(s.Interface)
 			challenger := newChallenger(m, s.Interface)

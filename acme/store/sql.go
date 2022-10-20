@@ -53,7 +53,7 @@ func NewSQLStore(dburl string) Interface {
 
 type Project struct {
 	ID                      string
-	Name                    string
+	Name                    string `validate:"required"`
 	TermID                  string
 	Website                 string
 	CreatedAt               time.Time
@@ -61,7 +61,7 @@ type Project struct {
 	ExternalAccountRequired bool
 
 	// Certificate issuer information
-	CommonName         string
+	CommonName         string `validate:"required"`
 	Country            []string
 	Organization       []string
 	OrganizationalUnit []string
@@ -72,10 +72,10 @@ type Project struct {
 	KeyUsage           x509.KeyUsage
 	ExtKeyUsage        []x509.ExtKeyUsage
 
-	UseRemoteCA       bool   // TODO
-	RemoteCAEndpoint  string // TODO
-	RemoteCAProjectID string // TODO
-	RemoteCAID        string // TODO
+	UseRemoteCA       bool
+	RemoteCAEndpoint  string `validate:"required_if=UseRemoteCA true"`
+	RemoteCAProjectID string `validate:"required_if=UseRemoteCA true,printascii"`
+	RemoteCAID        string `validate:"required_if=UseRemoteCA true,printascii"`
 }
 
 func (s *sqlStoreImpl) CreateProject(ctx context.Context, proj *Project) (*Project, error) {

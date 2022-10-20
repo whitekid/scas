@@ -47,7 +47,7 @@ func ForOneSQLDriver(t *testing.T, driver string, testfn func(t *testing.T, dbUR
 			require.NoError(t, err)
 
 			reset = func() {
-				_, err := db.Exec("DROP DATABASE IF EXISTS" + dbname)
+				_, err := db.Exec("DROP DATABASE IF EXISTS " + dbname)
 				require.NoError(t, err)
 
 				_, err = db.Exec("CREATE DATABASE " + dbname)

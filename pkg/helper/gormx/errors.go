@@ -20,6 +20,7 @@ func newSQLError(m string) error { return &sqlError{m: m} }
 var (
 	ErrForeignKeyConstraintFailed = newSQLError("FOREIGN KEY constraint failed")
 	ErrUniqueConstraintFailed     = newSQLError("UNIQUE constraint failed")
+	ErrCheckConstraintFailed      = newSQLError("CHECK constraint failed")
 )
 
 func IsSQLError(err error) bool {
@@ -43,6 +44,7 @@ func init() {
 	}{
 		{ErrUniqueConstraintFailed, sqlite3.ErrConstraint, 2067, 1062, "23505"},
 		{ErrForeignKeyConstraintFailed, sqlite3.ErrConstraint, 787, 1452, "23503"},
+		{ErrCheckConstraintFailed, sqlite3.ErrConstraint, sqlite3.ErrConstraintCheck, 3819, "23514"},
 	}
 	for _, se := range sqlErrors {
 		sqliteExtCodeToErr[se.sqliteExtErr] = se.err
@@ -64,7 +66,7 @@ func ConvertSQLError(err error) error {
 				return ee
 			}
 
-			log.Debugf("\tUnhandled sqlite error: code=%d, extcode=%d", se.Code, se.ExtendedCode)
+			log.Debugf("\tUnhandled sqlite error: code=%d(%s), extcode=%d(%s)", se.Code, se.Code.Error(), se.ExtendedCode, se.ExtendedCode.Error())
 		}
 		return err
 	} else if me, ok := err.(*mysql.MySQLError); ok {
