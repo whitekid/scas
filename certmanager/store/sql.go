@@ -208,7 +208,12 @@ func (s *sqlStoreImpl) GetCA(ctx context.Context, projectID, ID string) (*types.
 }
 
 func (s *sqlStoreImpl) CreateCertificate(ctx context.Context, projectID string, req *provider.CreateRequest, certPEM, keyPEM, chainPEM []byte, parentCAID string) (ca *types.Certificate, err error) {
-	if err := helper.ValidateVar(req, "required"); err != nil {
+	log.Debugf("CreateCertificate: proj=%s, ca=%s", projectID, parentCAID)
+
+	if err := helper.ValidateVars(
+		req, "required",
+		parentCAID, "required",
+	); err != nil {
 		return nil, errors.Wrap(err, "fail to create certficiate")
 	}
 

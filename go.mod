@@ -20,9 +20,9 @@ require (
 	github.com/whitekid/goxp v0.0.0-20221007001030-9e7a63291f01
 	gopkg.in/yaml.v3 v3.0.1
 	gorm.io/driver/mysql v1.4.3
-	gorm.io/driver/postgres v1.4.4
+	gorm.io/driver/postgres v1.4.5
 	gorm.io/driver/sqlite v1.4.3
-	gorm.io/gorm v1.24.0
+	gorm.io/gorm v1.24.1-0.20221019064659-5dd2bb482755
 )
 
 require (

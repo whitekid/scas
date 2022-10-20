@@ -161,6 +161,7 @@ type CAService struct {
 
 func (svc *CAService) Create(ctx context.Context, req *CertificateRequest) (*CertificateRequest, error) {
 	log.Debugf("CAService.Create(): %+v", req)
+
 	resp, err := svc.client.sendRequest(ctx, svc.client.client.Post("%s", svc.endpoint).JSON(req))
 	if err != nil {
 		return nil, err

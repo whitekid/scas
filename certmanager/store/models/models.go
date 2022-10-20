@@ -49,7 +49,7 @@ type Certificate struct {
 	ID                   string                `gorm:"primaryKey;size:22;check:id<>''"`
 	ProjectID            string                `gorm:"not null;size:22;check:project_id<>''" validate:"required"`
 	Project              *Project              `gorm:"foreignKey:ProjectID"`
-	CAID                 string                `gorm:"not null;size:22;check:ca_id<>''"`
+	CAID                 string                `gorm:"not null;size:22;check:ca_id<>''" validate:"required"`
 	CertificateAuthority *CertificateAuthority `gorm:"foreignKey:CAID"`
 
 	Request []byte // json encoded request
