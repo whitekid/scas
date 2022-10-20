@@ -118,3 +118,29 @@ func TestGenerateKey(t *testing.T) {
 		})
 	}
 }
+
+func TestPrivateKeyAlgorithm(t *testing.T) {
+	type args struct {
+		algo x509.SignatureAlgorithm
+	}
+	tests := []struct {
+		name string
+		args args
+	}{
+		{"valid", args{x509.ECDSAWithSHA256}},
+		{"valid", args{x509.ECDSAWithSHA384}},
+		{"valid", args{x509.ECDSAWithSHA512}},
+		{"valid", args{x509.SHA256WithRSA}},
+		{"valid", args{x509.SHA384WithRSA}},
+		{"valid", args{x509.SHA512WithRSA}},
+		{"valid", args{x509.PureEd25519}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			key, err := GenerateKey(tt.args.algo)
+			require.NoError(t, err)
+			got := PrivateKeyAlgorithm(key)
+			require.Equalf(t, tt.args.algo, got, "want %s but got %s", tt.args.algo.String(), got.String())
+		})
+	}
+}

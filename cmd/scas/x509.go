@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -68,40 +67,40 @@ func csrInfo(ctx context.Context, filename string) error {
 	}
 
 	return helper.WriteJSON(os.Stdout, &struct {
-		Version            int    `json:",omitempty"`
-		CommonName         string `json:",omitempty"`
-		PublicKeyAlgorithm string `json:",omitempty"`
-		Country            string `json:",omitempty"`
-		Organization       string `json:",omitempty"`
-		OrganizationalUnit string `json:",omitempty"`
-		Locality           string `json:",omitempty"`
-		Province           string `json:",omitempty"`
-		StreetAddress      string `json:",omitempty"`
-		Extra              string `json:",omitempty"`
-		PostcalCode        string `json:",omitempty"`
+		Version            int      `json:",omitempty"`
+		CommonName         string   `json:",omitempty"`
+		PublicKeyAlgorithm string   `json:",omitempty"`
+		Country            []string `json:",omitempty"`
+		Organization       []string `json:",omitempty"`
+		OrganizationalUnit []string `json:",omitempty"`
+		Locality           []string `json:",omitempty"`
+		Province           []string `json:",omitempty"`
+		StreetAddress      []string `json:",omitempty"`
+		PostcalCode        []string `json:",omitempty"`
+		Extra              []string `json:",omitempty"`
 
-		DNSName      string `json:",omitempty"`
-		EmailAddress string `json:",omitempty"`
-		IPAdress     string `json:",omitempty"`
-		URIs         string `json:",omitempty"`
+		DNSName      []string `json:",omitempty"`
+		EmailAddress []string `json:",omitempty"`
+		IPAdress     []string `json:",omitempty"`
+		URIs         []string `json:",omitempty"`
 
 		SerialNumber string `json:",omitempty"`
 	}{
 		Version:            csr.Version,
 		CommonName:         csr.Subject.CommonName,
 		PublicKeyAlgorithm: csr.PublicKeyAlgorithm.String(),
-		Country:            strings.Join(csr.Subject.Country, ", "),
-		Organization:       strings.Join(csr.Subject.Organization, ", "),
-		OrganizationalUnit: strings.Join(csr.Subject.OrganizationalUnit, ", "),
-		Locality:           strings.Join(csr.Subject.Locality, ", "),
-		Province:           strings.Join(csr.Subject.Province, ", "),
-		StreetAddress:      strings.Join(csr.Subject.StreetAddress, ", "),
-		Extra:              strings.Join(fx.Map(csr.Subject.ExtraNames, func(e pkix.AttributeTypeAndValue) string { return e.Type.String() }), ", "),
-		PostcalCode:        strings.Join(csr.Subject.PostalCode, ", "),
-		DNSName:            strings.Join(csr.DNSNames, ", "),
-		EmailAddress:       strings.Join(csr.EmailAddresses, ", "),
-		IPAdress:           strings.Join(fx.Map(csr.IPAddresses, func(e net.IP) string { return e.String() }), ", "),
-		URIs:               strings.Join(fx.Map(csr.URIs, func(e *url.URL) string { return e.String() }), ", "),
+		Country:            csr.Subject.Country,
+		Organization:       csr.Subject.Organization,
+		OrganizationalUnit: csr.Subject.OrganizationalUnit,
+		Locality:           csr.Subject.Locality,
+		Province:           csr.Subject.Province,
+		StreetAddress:      csr.Subject.StreetAddress,
+		PostcalCode:        csr.Subject.PostalCode,
+		Extra:              fx.Map(csr.Subject.ExtraNames, func(e pkix.AttributeTypeAndValue) string { return e.Type.String() }),
+		DNSName:            csr.DNSNames,
+		EmailAddress:       csr.EmailAddresses,
+		IPAdress:           fx.Map(csr.IPAddresses, func(e net.IP) string { return e.String() }),
+		URIs:               fx.Map(csr.URIs, func(e *url.URL) string { return e.String() }),
 		SerialNumber:       csr.Subject.SerialNumber,
 	})
 }
@@ -142,28 +141,28 @@ func certInfo(ctx context.Context, filename string) error {
 
 	fx.ForEach(certs, func(_ int, cert *x509.Certificate) {
 		helper.WriteJSON(os.Stdout, &struct {
-			Version            int    `json:",omitempty"`
-			CommonName         string `json:",omitempty"`
-			PublicKeyAlgorithm string `json:",omitempty"`
-			Country            string `json:",omitempty"`
-			Organization       string `json:",omitempty"`
-			OrganizationalUnit string `json:",omitempty"`
-			Locality           string `json:",omitempty"`
-			Province           string `json:",omitempty"`
-			StreetAddress      string `json:",omitempty"`
-			Extra              string `json:",omitempty"`
-			PostcalCode        string `json:",omitempty"`
+			Version            int      `json:",omitempty"`
+			CommonName         string   `json:",omitempty"`
+			PublicKeyAlgorithm string   `json:",omitempty"`
+			Country            []string `json:",omitempty"`
+			Organization       []string `json:",omitempty"`
+			OrganizationalUnit []string `json:",omitempty"`
+			Locality           []string `json:",omitempty"`
+			Province           []string `json:",omitempty"`
+			StreetAddress      []string `json:",omitempty"`
+			PostcalCode        []string `json:",omitempty"`
+			Extra              []string `json:",omitempty"`
 
-			DNSName      string `json:",omitempty"`
-			EmailAddress string `json:",omitempty"`
-			IPAdress     string `json:",omitempty"`
-			URIs         string `json:",omitempty"`
+			DNSName      []string `json:",omitempty"`
+			EmailAddress []string `json:",omitempty"`
+			IPAdress     []string `json:",omitempty"`
+			URIs         []string `json:",omitempty"`
 
 			SerialNumber          string `json:",omitempty"`
 			SubjectKeyId          []byte `json:",omitempty"`
 			KeyUsage              string
 			ExtKeyUsage           []string
-			CRLDistributionPoints string `json:",omitempty"`
+			CRLDistributionPoints []string `json:",omitempty"`
 
 			NotAfter  time.Time `json:",omitempty"`
 			NotBefore time.Time `json:",omitempty"`
@@ -174,23 +173,23 @@ func certInfo(ctx context.Context, filename string) error {
 			Version:               cert.Version,
 			CommonName:            cert.Issuer.CommonName,
 			PublicKeyAlgorithm:    cert.PublicKeyAlgorithm.String(),
-			Country:               strings.Join(cert.Issuer.Country, ", "),
-			Organization:          strings.Join(cert.Issuer.Organization, ", "),
-			OrganizationalUnit:    strings.Join(cert.Issuer.OrganizationalUnit, ", "),
-			Locality:              strings.Join(cert.Issuer.Locality, ", "),
-			Province:              strings.Join(cert.Issuer.Province, ", "),
-			StreetAddress:         strings.Join(cert.Issuer.StreetAddress, ", "),
-			Extra:                 strings.Join(fx.Map(cert.Issuer.ExtraNames, func(e pkix.AttributeTypeAndValue) string { return e.Type.String() }), ", "),
-			PostcalCode:           strings.Join(cert.Issuer.PostalCode, ", "),
-			DNSName:               strings.Join(cert.DNSNames, ", "),
-			EmailAddress:          strings.Join(cert.EmailAddresses, ", "),
-			IPAdress:              strings.Join(fx.Map(cert.IPAddresses, func(e net.IP) string { return e.String() }), ", "),
-			URIs:                  strings.Join(fx.Map(cert.URIs, func(e *url.URL) string { return e.String() }), ", "),
+			Country:               cert.Issuer.Country,
+			Organization:          cert.Issuer.Organization,
+			OrganizationalUnit:    cert.Issuer.OrganizationalUnit,
+			Locality:              cert.Issuer.Locality,
+			Province:              cert.Issuer.Province,
+			StreetAddress:         cert.Issuer.StreetAddress,
+			Extra:                 fx.Map(cert.Issuer.ExtraNames, func(e pkix.AttributeTypeAndValue) string { return e.Type.String() }),
+			PostcalCode:           cert.Issuer.PostalCode,
+			DNSName:               cert.DNSNames,
+			EmailAddress:          cert.EmailAddresses,
+			IPAdress:              fx.Map(cert.IPAddresses, func(e net.IP) string { return e.String() }),
+			URIs:                  fx.Map(cert.URIs, func(e *url.URL) string { return e.String() }),
 			SerialNumber:          cert.SerialNumber.String(),
 			SubjectKeyId:          cert.SubjectKeyId,
 			KeyUsage:              x509x.KeyUsageToStr(cert.KeyUsage),
 			ExtKeyUsage:           fx.Map(cert.ExtKeyUsage, func(u x509.ExtKeyUsage) string { return x509x.ExtKeyUsageToStr(u) }),
-			CRLDistributionPoints: strings.Join(cert.CRLDistributionPoints, ", "),
+			CRLDistributionPoints: cert.CRLDistributionPoints,
 			NotAfter:              cert.NotAfter,
 			NotBefore:             cert.NotBefore,
 			IssuerCommonName:      cert.Issuer.CommonName,

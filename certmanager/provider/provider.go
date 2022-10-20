@@ -12,7 +12,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/whitekid/goxp/fx"
 
-	"scas/client/common/x509types"
 	"scas/pkg/helper"
 	"scas/pkg/helper/x509x"
 )
@@ -29,10 +28,11 @@ type CreateRequest struct {
 	SerialNumber                              *big.Int
 	CommonName                                string   `validate:"required"`
 	Hosts                                     []string // DNSNames, IPAddress, Email
-	Country, Organization, OrganizationalUnit string
-	Locality, Province                        string
-	StreetAddress, PostalCode                 string
-	KeyAlgorithm                              x509types.SignatureAlgorithm `validate:"required"`
+	Country, Organization, OrganizationalUnit []string
+	Locality, Province                        []string
+	StreetAddress, PostalCode                 []string
+	KeyAlgorithm                              x509.SignatureAlgorithm `validate:"required"`
+	SignatureAlgorithm                        x509.SignatureAlgorithm
 	IsCA                                      bool
 	KeyUsage                                  x509.KeyUsage
 	ExtKeyUsage                               []x509.ExtKeyUsage
@@ -48,16 +48,17 @@ func (req *CreateRequest) Template() (*x509.Certificate, error) {
 	}
 
 	template := &x509.Certificate{
-		SerialNumber: fx.Ternary(req.SerialNumber == nil, x509x.RandomSerial(), req.SerialNumber),
+		SignatureAlgorithm: req.SignatureAlgorithm,
+		SerialNumber:       fx.Ternary(req.SerialNumber == nil, x509x.RandomSerial(), req.SerialNumber),
 		Subject: pkix.Name{
 			CommonName:         req.CommonName,
-			Country:            fx.Ternary(req.Country != "", []string{req.Country}, nil),
-			Organization:       fx.Ternary(req.Organization != "", []string{req.Organization}, nil),
-			OrganizationalUnit: fx.Ternary(req.OrganizationalUnit != "", []string{req.OrganizationalUnit}, nil),
-			Locality:           fx.Ternary(req.Locality != "", []string{req.Locality}, nil),
-			Province:           fx.Ternary(req.Province != "", []string{req.Province}, nil),
-			StreetAddress:      fx.Ternary(req.StreetAddress != "", []string{req.StreetAddress}, nil),
-			PostalCode:         fx.Ternary(req.PostalCode != "", []string{req.PostalCode}, nil),
+			Country:            req.Country,
+			Organization:       req.Organization,
+			OrganizationalUnit: req.OrganizationalUnit,
+			Locality:           req.Locality,
+			Province:           req.Province,
+			StreetAddress:      req.StreetAddress,
+			PostalCode:         req.PostalCode,
 		},
 		IsCA:                  req.IsCA,
 		BasicConstraintsValid: req.IsCA,

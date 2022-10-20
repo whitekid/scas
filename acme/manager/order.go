@@ -6,6 +6,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/base64"
 	"math/big"
+	"net"
 	"time"
 
 	"github.com/pkg/errors"
@@ -144,6 +145,7 @@ func (m *Manager) FinalizeOrder(ctx context.Context, orderID string, csr *x509.C
 	// TODO private key를 어디선가 써야하겠지?
 	certPEM, _, chainPEM, err := caIntf.CreateCertificate(ctx, &ca.CreateRequest{
 		SerialNumber: serial,
+		KeyAlgorithm: x509.ECDSAWithSHA256, // TODO 이건 어디서 가져올까요?
 		Subject:      csr.Subject,
 		Issuer: pkix.Name{
 			CommonName:         proj.CommonName,
@@ -155,20 +157,17 @@ func (m *Manager) FinalizeOrder(ctx context.Context, orderID string, csr *x509.C
 			StreetAddress:      proj.StreetAddress,
 			PostalCode:         proj.PostalCode,
 		},
-		DNSNames:       csr.DNSNames,
-		EmailAddresses: csr.EmailAddresses,
-		IPAddresses:    csr.IPAddresses,
-		URIs:           csr.URIs,
-		NotBefore:      order.NotBefore.Time,
-		NotAfter:       order.NotAfter.Time,
-		KeyUsage:       proj.KeyUsage,
-		ExtKeyUsage:    proj.ExtKeyUsage,
+		Hosts:       append(append(csr.DNSNames, csr.EmailAddresses...), fx.Map(csr.IPAddresses, func(ip net.IP) string { return ip.String() })...),
+		URIs:        csr.URIs,
+		NotBefore:   order.NotBefore.Time,
+		NotAfter:    order.NotAfter.Time,
+		KeyUsage:    proj.KeyUsage,
+		ExtKeyUsage: proj.ExtKeyUsage,
 	})
 	if err != nil {
 		return nil, errors.Wrapf(err, "fail to create certificate")
 	}
 
-	log.Debugf("@@@@ cert: %s", certPEM)
 	_, err = m.store.CreateCertificate(ctx, &store.Certificate{
 		ProjectID: order.ProjectID,
 		OrderID:   order.ID,

@@ -113,21 +113,22 @@ type CertificateRequest struct {
 	CommonName   string   `json:",omitempty" validate:"required"` // Common Name
 
 	// Names; some part of pkix.Name
-	Country            string `json:",omitempty"`
-	Province           string `json:",omitempty"` // State or Province
-	Locality           string `json:",omitempty"`
-	StreetAddress      string `json:",omitempty"`
-	PostalCode         string `json:",omitempty"`
-	Organization       string `json:",omitempty"` // Organization Name
-	OrganizationalUnit string `json:",omitempty"` // Organization Unit Name
+	Country            []string `json:",omitempty"`
+	Province           []string `json:",omitempty"` // State or Province
+	Locality           []string `json:",omitempty"`
+	StreetAddress      []string `json:",omitempty"`
+	PostalCode         []string `json:",omitempty"`
+	Organization       []string `json:",omitempty"` // Organization Name
+	OrganizationalUnit []string `json:",omitempty"` // Organization Unit Name
 
 	Hosts []string `json:",omitempty"` // DNS Name and IP Addresse
 
-	KeyAlgorithm x509types.SignatureAlgorithm `json:",omitempty" validate:"required"`
-	KeyUsage     x509.KeyUsage
-	ExtKeyUsage  []x509.ExtKeyUsage
-	NotAfter     time.Time `json:",omitempty" validate:"required"`
-	NotBefore    time.Time `json:",omitempty" validate:"required"`
+	KeyAlgorithm       x509.SignatureAlgorithm `json:",omitempty" validate:"required"`
+	SignatureAlgorithm x509.SignatureAlgorithm `json:",omitempty"`
+	KeyUsage           x509.KeyUsage
+	ExtKeyUsage        []x509.ExtKeyUsage
+	NotAfter           time.Time `json:",omitempty" validate:"required"`
+	NotBefore          time.Time `json:",omitempty" validate:"required"`
 
 	CRL string `json:",omitempty"`
 }

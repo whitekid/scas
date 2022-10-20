@@ -45,18 +45,18 @@ func newTestServerWithFixture(ctx context.Context, t *testing.T) (*httptest.Serv
 	project := testutils.Must1(repo.CreateProject(ctx, testProjectName))
 	rootCA := testutils.Must1(repo.CreateCertificateAuthority(ctx, project.ID, &certmanager.CreateRequest{
 		CommonName:   "example.com ROOT CA",
-		KeyAlgorithm: x509types.ECDSA_P384,
-		KeyUsage:     x509types.RootCAKeyUsage,
-		ExtKeyUsage:  x509types.RootCAExtKeyUsage,
+		KeyAlgorithm: x509.ECDSAWithSHA384,
+		KeyUsage:     x509types.KeyUsageRootCA,
+		ExtKeyUsage:  x509types.ExtKeyUsageRootCA,
 		NotAfter:     helper.AfterNow(5, 0, 0),
 		NotBefore:    helper.AfterNow(0, -1, 0),
 		IsCA:         true,
 	}, ""))
 	subCA := testutils.Must1(repo.CreateCertificateAuthority(ctx, project.ID, &certmanager.CreateRequest{
 		CommonName:   "example.com CA 1",
-		KeyAlgorithm: x509types.ECDSA_P256,
-		KeyUsage:     x509types.SubCAKeyUsage,
-		ExtKeyUsage:  x509types.SubCAExtKeyUsage,
+		KeyAlgorithm: x509.ECDSAWithSHA384,
+		KeyUsage:     x509types.KeyUsageSubCA,
+		ExtKeyUsage:  x509types.ExtKeyUsageSubCA,
 		NotAfter:     helper.AfterNow(3, 0, 0),
 		NotBefore:    helper.AfterNow(0, -0, 0),
 		IsCA:         true,
@@ -64,9 +64,9 @@ func newTestServerWithFixture(ctx context.Context, t *testing.T) (*httptest.Serv
 	cert := testutils.Must1(repo.CreateCertificate(ctx, project.ID, &certmanager.CreateRequest{
 		CommonName:   testServerCN,
 		Hosts:        []string{testServerCN},
-		KeyAlgorithm: x509types.RSA_2048,
-		KeyUsage:     x509types.ServerKeyUsage,
-		ExtKeyUsage:  x509types.ServerExtKeyUsage,
+		KeyAlgorithm: x509.ECDSAWithSHA256,
+		KeyUsage:     x509types.KeyUsageServer,
+		ExtKeyUsage:  x509types.ExtKeyUsageServer,
 		NotAfter:     helper.AfterNow(1, 0, 0),
 		NotBefore:    helper.AfterNow(0, -0, 0),
 	}, subCA.ID))
@@ -108,16 +108,16 @@ func TestScenario(t *testing.T) {
 	// create root CA
 	rootCAReq := &CertificateRequest{
 		CommonName:         "ROOT CA 1",
-		Country:            "country",
-		Organization:       "example.com org",
-		OrganizationalUnit: "example.com org unit",
-		StreetAddress:      "street",
-		Locality:           "locality",
-		Province:           "province",
-		PostalCode:         "postal",
-		KeyAlgorithm:       x509types.ECDSA_P384,
-		KeyUsage:           x509types.RootCAKeyUsage,
-		ExtKeyUsage:        x509types.RootCAExtKeyUsage,
+		Country:            []string{"country"},
+		Organization:       []string{"example.com org"},
+		OrganizationalUnit: []string{"example.com org unit"},
+		StreetAddress:      []string{"street"},
+		Locality:           []string{"locality"},
+		Province:           []string{"province"},
+		PostalCode:         []string{"postal"},
+		KeyAlgorithm:       x509.ECDSAWithSHA384,
+		KeyUsage:           x509types.KeyUsageRootCA,
+		ExtKeyUsage:        x509types.ExtKeyUsageRootCA,
 		NotAfter:           helper.AfterNow(5, 0, 0),
 		NotBefore:          helper.AfterNow(0, -1, 0),
 		CRL:                fmt.Sprintf("%s/%s/crl", ts.URL, project.ID),
@@ -134,9 +134,9 @@ func TestScenario(t *testing.T) {
 	// create subordinate ca, with parent
 	subCAReq := &CertificateRequest{
 		CommonName:   " CA",
-		KeyAlgorithm: x509types.ECDSA_P256,
-		KeyUsage:     x509types.SubCAKeyUsage,
-		ExtKeyUsage:  x509types.SubCAExtKeyUsage,
+		KeyAlgorithm: x509.ECDSAWithSHA384,
+		KeyUsage:     x509types.KeyUsageSubCA,
+		ExtKeyUsage:  x509types.ExtKeyUsageSubCA,
 		NotAfter:     helper.AfterNow(3, 0, 0),
 		NotBefore:    helper.AfterNow(0, -1, 0),
 		CAID:         newCA.ID,
@@ -153,9 +153,9 @@ func TestScenario(t *testing.T) {
 	newCert, err := projectSvc.Certificates().Create(ctx, &CertificateRequest{
 		CommonName:   testServerCN,
 		Hosts:        []string{testServerCN},
-		KeyAlgorithm: x509types.RSA_2048,
-		KeyUsage:     x509types.ServerKeyUsage,
-		ExtKeyUsage:  x509types.ServerExtKeyUsage,
+		KeyAlgorithm: x509.ECDSAWithSHA384,
+		KeyUsage:     x509types.KeyUsageServer,
+		ExtKeyUsage:  x509types.ExtKeyUsageServer,
 		NotAfter:     helper.AfterNow(1, 0, 0),
 		NotBefore:    helper.AfterNow(0, -1, 0),
 		CAID:         subCA.ID,
@@ -179,7 +179,7 @@ func TestScenario(t *testing.T) {
 	revokedCertReq := &CertificateRequest{
 		CommonName:   testRevokedServerCN,
 		Hosts:        []string{testRevokedServerCN},
-		KeyAlgorithm: x509types.RSA_2048,
+		KeyAlgorithm: x509.ECDSAWithSHA384,
 		NotAfter:     helper.AfterNow(1, 0, 0),
 		NotBefore:    helper.AfterNow(0, -1, 0),
 		CAID:         subCA.ID,
@@ -215,8 +215,8 @@ func Test_v1Alpha1API_createCA(t *testing.T) {
 		wantErr bool
 	}{
 		{"empty request", args{&CertificateRequest{}}, true},
-		{"valid: cn", args{&CertificateRequest{CommonName: "cn", KeyAlgorithm: x509types.ECDSA_P256, NotBefore: notBefore, NotAfter: notAfter}}, false},
-		{"valid: crl", args{&CertificateRequest{CommonName: "cn", CRL: ts.URL, KeyAlgorithm: x509types.ECDSA_P256, NotBefore: notBefore, NotAfter: notAfter}}, false},
+		{"valid: cn", args{&CertificateRequest{CommonName: "cn", KeyAlgorithm: x509.ECDSAWithSHA384, NotBefore: notBefore, NotAfter: notAfter}}, false},
+		{"valid: crl", args{&CertificateRequest{CommonName: "cn", CRL: ts.URL, KeyAlgorithm: x509.ECDSAWithSHA384, NotBefore: notBefore, NotAfter: notAfter}}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
