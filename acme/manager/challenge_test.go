@@ -11,8 +11,8 @@ import (
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/require"
 	"github.com/whitekid/goxp"
-	"github.com/whitekid/goxp/fx"
 	"github.com/whitekid/goxp/log"
+	"github.com/whitekid/goxp/testx"
 
 	"scas/acme/store"
 	acmeclient "scas/client/acme"
@@ -145,13 +145,13 @@ func TestChallenger(t *testing.T) {
 				chalServer := testutils.NewChallengeServer(ctx, chal.Token, helper.SHA256Sum(pub))
 				os.Setenv("CHALLENGE_HTTP01_SERVER_PORT", chalServer.Port)
 			case acmeclient.ChallengeTypeDns01:
-				s := newTestDNSServer(ctx, [][]string{{"_acme-challenge." + authz.Identifier.Value, base64.RawURLEncoding.EncodeToString(helper.SHA256Sum(pub))}})
+				s := newTestDNSServer(ctx, t, [][]string{{"_acme-challenge." + authz.Identifier.Value, base64.RawURLEncoding.EncodeToString(helper.SHA256Sum(pub))}})
 				os.Setenv("CHALLENGE_DNS01_SERVER_ADDR", s.addr)
 				defer os.Unsetenv("CHALLENGE_DNS01_SERVER_ADDR")
 			}
 
 			go challenger.Start(ctx, errCh)
-			go fx.IterChan(ctx, errCh, func(err error) { t.Logf("error: %+v", err) })
+			go goxp.IterChan(ctx, errCh, func(err error) { t.Logf("error: %+v", err) })
 
 			challenger.Enqueue(chal.ID, authz.ID)
 			time.Sleep(time.Millisecond * 500) // give some time to try
@@ -191,7 +191,7 @@ func TestChallengeRetry(t *testing.T) {
 			defer close(errCh)
 
 			go challenger.Start(ctx, errCh)
-			go fx.IterChan(ctx, errCh, func(err error) {})
+			go goxp.IterChan(ctx, errCh, func(err error) {})
 
 			challenger.Enqueue(s.challenge.ID, s.authz.ID)
 			time.Sleep(time.Millisecond * 500)
@@ -222,8 +222,8 @@ type testDNSServer struct {
 	addr   string
 }
 
-func newTestDNSServer(ctx context.Context, records [][]string) *testDNSServer {
-	addr := fmt.Sprintf("0.0.0.0:%d", goxp.AvailableUdpPort())
+func newTestDNSServer(ctx context.Context, t *testing.T, records [][]string) *testDNSServer {
+	addr := fmt.Sprintf("0.0.0.0:%d", testx.NoError(t, goxp.T2(goxp.AvailableUdpPort())))
 
 	server := &dns.Server{Addr: addr, Net: "udp"}
 
@@ -276,7 +276,7 @@ func TestResolver(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	s := newTestDNSServer(ctx, [][]string{{"_acme-challenge.example.com.", "local-challenge-token"}})
+	s := newTestDNSServer(ctx, t, [][]string{{"_acme-challenge.example.com.", "local-challenge-token"}})
 
 	type args struct {
 		q      string

@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/whitekid/goxp/fx"
+	"github.com/whitekid/goxp"
 
 	"scas/pkg/helper/x509x"
 )
@@ -50,7 +50,7 @@ func Test_localImpl_CreateCertificate(t *testing.T) {
 			}
 			require.Equal(t, tt.args.req.Subject.CommonName, cert.Subject.CommonName)
 
-			sigAlgo := fx.Ternary(tt.args.req.SignatureAlgorithm == x509.UnknownSignatureAlgorithm, tt.args.req.KeyAlgorithm, tt.args.req.SignatureAlgorithm)
+			sigAlgo := goxp.Ternary(tt.args.req.SignatureAlgorithm == x509.UnknownSignatureAlgorithm, tt.args.req.KeyAlgorithm, tt.args.req.SignatureAlgorithm)
 			require.Equal(t, sigAlgo.String(), cert.SignatureAlgorithm.String())
 
 			priv, err := x509x.ParsePrivateKey(key)

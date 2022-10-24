@@ -89,7 +89,7 @@ func ParseCSR(csrBytes []byte) (*x509.CertificateRequest, error) {
 	return csr, nil
 }
 
-// PublicKey  PrivateKey and Signer interfaces
+// PublicKey PrivateKey and Signer interfaces
 // crypto.PrivateKey의 설명을 보면 함수가 다 있다고 함.
 type PrivateKey interface {
 	crypto.PrivateKey
@@ -268,17 +268,14 @@ var (
 		x509.ExtKeyUsageMicrosoftKernelCodeSigning:     "Microsoft Kernel Code Signing",
 	}
 	strToExtKeyUsage = make(map[string]x509.ExtKeyUsage, len(extKeyUsageToStr))
-
-	keyUsages    []x509.KeyUsage
-	extKeyUsages []x509.ExtKeyUsage
 )
 
 func init() {
-	keyUsages = fx.Keys(keyUsageToStr)
+	keyUsages := fx.Keys(keyUsageToStr)
 	sort.Slice(keyUsages, func(i, j int) bool { return int(keyUsages[i]) < int(keyUsages[j]) })
 	fx.ForEachMap(keyUsageToStr, func(k x509.KeyUsage, v string) { strToKeyUsage[v] = k })
 
-	extKeyUsages = fx.Keys(extKeyUsageToStr)
+	extKeyUsages := fx.Keys(extKeyUsageToStr)
 	sort.Slice(extKeyUsages, func(i, j int) bool { return int(extKeyUsages[i]) < int(extKeyUsages[j]) })
 	fx.ForEachMap(extKeyUsageToStr, func(k x509.ExtKeyUsage, v string) { strToExtKeyUsage[v] = k })
 }

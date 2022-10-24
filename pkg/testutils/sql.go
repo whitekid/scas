@@ -20,7 +20,7 @@ func DBName(name string) string {
 }
 
 func ForEachSQLDriver(t *testing.T, testfn func(t *testing.T, dbURL string, reset func())) {
-	fx.ForEach([]string{"sqlite", "mysql", "pgsql"}, func(_ int, driver string) {
+	fx.Each([]string{"sqlite", "mysql", "pgsql"}, func(_ int, driver string) {
 		if os.Getenv("SCAS_SKIP_SQL_"+strings.ToUpper(driver)) == "true" {
 			t.Skip("skip driver " + driver)
 			return

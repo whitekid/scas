@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/whitekid/goxp"
 	"github.com/whitekid/goxp/fx"
 	"github.com/whitekid/goxp/log"
 	"github.com/whitekid/goxp/request"
@@ -138,7 +139,7 @@ func (c *Challenger) Start(ctx context.Context, errCh chan<- error) {
 	chalCh := make(chan *challengeInfo, 10)
 	defer close(chalCh)
 
-	go fx.IterChan(ctx, chalCh, func(info *challengeInfo) {
+	go goxp.IterChan(ctx, chalCh, func(info *challengeInfo) {
 		if err := c.challenge(ctx, info.challengeID, info.authzID); err != nil {
 			errCh <- err
 
@@ -148,7 +149,10 @@ func (c *Challenger) Start(ctx context.Context, errCh chan<- error) {
 			}
 
 			log.Infof("challenge %s failed: error=%s, will be retry at %s", info.challengeID, err, retryAfter)
-			go helper.After(ctx, time.Until(retryAfter), func() { c.enqueue(info.challengeID, info.authzID) })
+			go goxp.After(ctx, time.Until(retryAfter), func() error {
+				c.enqueue(info.challengeID, info.authzID)
+				return nil
+			})
 		}
 	})
 

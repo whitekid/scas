@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"github.com/whitekid/goxp/fx"
+	"github.com/whitekid/goxp"
 
 	"scas/api/v1alpha1"
 	"scas/certmanager"
@@ -103,7 +103,7 @@ func TestSCAS(t *testing.T) {
 			require.Equal(t, req.SerialNumber, x509cert.SerialNumber)
 		}
 		require.Equal(t, req.KeyAlgorithm.String(), x509cert.SignatureAlgorithm.String())
-		sigAlgo := fx.Ternary(req.SignatureAlgorithm == x509.UnknownSignatureAlgorithm, req.KeyAlgorithm, req.KeyAlgorithm)
+		sigAlgo := goxp.Ternary(req.SignatureAlgorithm == x509.UnknownSignatureAlgorithm, req.KeyAlgorithm, req.KeyAlgorithm)
 		require.Equal(t, sigAlgo.String(), x509cert.SignatureAlgorithm.String())
 		require.Equal(t, req.Subject.CommonName, x509cert.Subject.CommonName)
 		require.Equal(t, req.Hosts, x509cert.DNSNames)

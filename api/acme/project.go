@@ -6,6 +6,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
+	"github.com/whitekid/goxp"
 	"github.com/whitekid/goxp/fx"
 
 	"scas/acme/store"
@@ -63,7 +64,7 @@ func (s *Server) projectToResouce(in *store.Project) *acmeclient.Project {
 		StreetAddress:      in.StreetAddress,
 		PostalCode:         in.PostalCode,
 		KeyUsage:           x509x.KeyUsageToStr(in.KeyUsage),
-		ExtKeyUsage:        fx.Ternary(len(in.ExtKeyUsage) > 0, fx.Map(in.ExtKeyUsage, func(x x509.ExtKeyUsage) string { return x509x.ExtKeyUsageToStr(x) }), nil),
+		ExtKeyUsage:        goxp.Ternary(len(in.ExtKeyUsage) > 0, fx.Map(in.ExtKeyUsage, func(x x509.ExtKeyUsage) string { return x509x.ExtKeyUsageToStr(x) }), nil),
 		UseRemoteCA:        in.UseRemoteCA,
 		RemoteCAEndpoint:   in.RemoteCAEndpoint,
 		RemoteCAProjectID:  in.RemoteCAProjectID,
