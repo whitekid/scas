@@ -8,7 +8,7 @@ import (
 	"net/mail"
 
 	"github.com/pkg/errors"
-	"github.com/whitekid/goxp/fx"
+	"github.com/whitekid/goxp"
 
 	"scas/pkg/helper"
 	"scas/pkg/helper/x509x"
@@ -37,8 +37,8 @@ func (loc *localImpl) CreateCertificate(ctx context.Context, in *CreateRequest) 
 	parentPrivKey := privKey
 
 	template := &x509.Certificate{
-		SignatureAlgorithm:    fx.Ternary(in.SignatureAlgorithm == x509.UnknownSignatureAlgorithm, in.KeyAlgorithm, in.SignatureAlgorithm),
-		SerialNumber:          fx.Ternary(in.SerialNumber == nil, x509x.RandomSerial(), in.SerialNumber),
+		SignatureAlgorithm:    goxp.Ternary(in.SignatureAlgorithm == x509.UnknownSignatureAlgorithm, in.KeyAlgorithm, in.SignatureAlgorithm),
+		SerialNumber:          goxp.Ternary(in.SerialNumber == nil, x509x.RandomSerial(), in.SerialNumber),
 		Subject:               in.Subject,
 		Issuer:                in.Issuer,
 		URIs:                  in.URIs,

@@ -9,6 +9,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
+	"github.com/whitekid/goxp"
 	"github.com/whitekid/goxp/fx"
 	"github.com/whitekid/goxp/log"
 
@@ -39,7 +40,7 @@ func (s *ACMEServer) newAccount(c echo.Context) error {
 	acct.Orders = s.accountOrderListURL(c, acct.ID)
 
 	c.Response().Header().Set(echo.HeaderLocation, s.accountURL(c, acct.ID))
-	return c.JSON(fx.Ternary(created, http.StatusCreated, http.StatusOK), &acct.AccountResource)
+	return c.JSON(goxp.Ternary(created, http.StatusCreated, http.StatusOK), &acct.AccountResource)
 }
 
 func (s *ACMEServer) validateAccountRequest(req *acmeclient.AccountRequest) error {

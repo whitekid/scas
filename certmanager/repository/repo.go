@@ -13,6 +13,7 @@ import (
 
 	"github.com/hashicorp/go-multierror"
 	"github.com/pkg/errors"
+	"github.com/whitekid/goxp"
 	"github.com/whitekid/goxp/fx"
 	"github.com/whitekid/goxp/log"
 
@@ -93,7 +94,7 @@ func (repo *repoImpl) CreateCertificateAuthority(ctx context.Context, projectID 
 		return nil, err
 	}
 
-	ca, err := repo.store.CreateCA(ctx, projectID, req, certPEM, certPrivateKeyPEM, fx.Ternary(parentCAID == "", nil, &parentCAID))
+	ca, err := repo.store.CreateCA(ctx, projectID, req, certPEM, certPrivateKeyPEM, goxp.Ternary(parentCAID == "", nil, &parentCAID))
 	if err != nil {
 		return nil, errors.Wrap(err, "fail to create certificate authority")
 	}

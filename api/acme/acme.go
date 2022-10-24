@@ -7,7 +7,6 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/whitekid/goxp"
-	"github.com/whitekid/goxp/fx"
 	"github.com/whitekid/goxp/log"
 
 	"scas/acme/manager"
@@ -122,10 +121,10 @@ func (s *Server) Startup(ctx context.Context, addr string) {
 
 	errCh := make(chan error)
 
-	go fx.CloseChan(ctx, errCh)
-	go fx.IterChan(ctx, errCh, func(err error) { log.Errorf("%+v", err) })
+	go goxp.CloseChan(ctx, errCh)
+	go goxp.IterChan(ctx, errCh, func(err error) { log.Errorf("%+v", err) })
 
-	go goxp.Every(ctx, time.Minute, func() error { return s.manager.CheckNonceTimeout(ctx) }, errCh)
+	go goxp.Every(ctx, time.Minute, false, func() error { return s.manager.CheckNonceTimeout(ctx) }, errCh)
 
 	go s.manager.StartChallengeLoop(ctx, errCh)
 }

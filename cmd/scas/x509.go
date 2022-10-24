@@ -139,7 +139,7 @@ func certInfo(ctx context.Context, filename string) error {
 		return err
 	}
 
-	fx.ForEach(certs, func(_ int, cert *x509.Certificate) {
+	fx.Each(certs, func(_ int, cert *x509.Certificate) {
 		helper.WriteJSON(os.Stdout, &struct {
 			Version            int      `json:",omitempty"`
 			CommonName         string   `json:",omitempty"`

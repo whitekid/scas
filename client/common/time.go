@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/whitekid/goxp/fx"
+	"github.com/whitekid/goxp"
 )
 
 // Timestamp RFC3339 timestamp
@@ -14,7 +14,7 @@ type Timestamp struct {
 
 func NewTimestamp(t time.Time) *Timestamp { return &Timestamp{t} }
 func NewTimestampP(t *time.Time) *Timestamp {
-	return fx.TernaryCF(t == nil, func() *Timestamp { return nil }, func() *Timestamp { return &Timestamp{*t} })
+	return goxp.TernaryCF(t == nil, func() *Timestamp { return nil }, func() *Timestamp { return &Timestamp{*t} })
 }
 func TimestampNow() *Timestamp { return NewTimestamp(time.Now().UTC()) }
 func ParseTimestamp(s string) (*Timestamp, error) {

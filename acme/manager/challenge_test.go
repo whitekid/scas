@@ -11,7 +11,6 @@ import (
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/require"
 	"github.com/whitekid/goxp"
-	"github.com/whitekid/goxp/fx"
 	"github.com/whitekid/goxp/log"
 
 	"scas/acme/store"
@@ -151,7 +150,7 @@ func TestChallenger(t *testing.T) {
 			}
 
 			go challenger.Start(ctx, errCh)
-			go fx.IterChan(ctx, errCh, func(err error) { t.Logf("error: %+v", err) })
+			go goxp.IterChan(ctx, errCh, func(err error) { t.Logf("error: %+v", err) })
 
 			challenger.Enqueue(chal.ID, authz.ID)
 			time.Sleep(time.Millisecond * 500) // give some time to try
@@ -191,7 +190,7 @@ func TestChallengeRetry(t *testing.T) {
 			defer close(errCh)
 
 			go challenger.Start(ctx, errCh)
-			go fx.IterChan(ctx, errCh, func(err error) {})
+			go goxp.IterChan(ctx, errCh, func(err error) {})
 
 			challenger.Enqueue(s.challenge.ID, s.authz.ID)
 			time.Sleep(time.Millisecond * 500)

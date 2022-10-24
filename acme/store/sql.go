@@ -167,7 +167,7 @@ func modelsToProject(proj *models.Project) *Project {
 	return &Project{
 		ID:                      proj.ID,
 		Name:                    proj.Name,
-		TermID:                  fx.TernaryCF(proj.TermID == nil, func() string { return "" }, func() string { return *proj.TermID }),
+		TermID:                  goxp.TernaryCF(proj.TermID == nil, func() string { return "" }, func() string { return *proj.TermID }),
 		Website:                 proj.Website,
 		CreatedAt:               proj.CreatedAt,
 		CAAIdentities:           proj.CAAIdentities,
@@ -306,7 +306,7 @@ func (s *sqlStoreImpl) CreateAccount(ctx context.Context, acct *Account) (*Accou
 
 	acctRef := &models.Account{
 		Key:                 acct.Key,
-		TermAgreeAt:         fx.TernaryCF(acct.TermAgreeAt.IsZero(), func() *time.Time { return nil }, func() *time.Time { return &acct.TermAgreeAt }),
+		TermAgreeAt:         goxp.TernaryCF(acct.TermAgreeAt.IsZero(), func() *time.Time { return nil }, func() *time.Time { return &acct.TermAgreeAt }),
 		Status:              acct.Status.String(),
 		Contacts:            acct.Contact,
 		TermOfServiceAgreed: acct.TermOfServiceAgreed,
@@ -330,7 +330,7 @@ func modelsToAccount(acct *models.Account) *Account {
 		ID:          acct.ID,
 		ProjectID:   acct.ProjectID,
 		Key:         acct.Key,
-		TermAgreeAt: fx.TernaryCF(acct.TermAgreeAt == nil, func() time.Time { return time.Time{} }, func() time.Time { return *acct.TermAgreeAt }),
+		TermAgreeAt: goxp.TernaryCF(acct.TermAgreeAt == nil, func() time.Time { return time.Time{} }, func() time.Time { return *acct.TermAgreeAt }),
 	}
 }
 
@@ -522,11 +522,11 @@ func (s *sqlStoreImpl) listOrder(ctx context.Context, opts ListOrderOpts) ([]*mo
 }
 
 func timeToTimestamp(t *time.Time) *common.Timestamp {
-	return fx.TernaryCF(t == nil, func() *common.Timestamp { return nil }, func() *common.Timestamp { return common.NewTimestampP(t) })
+	return goxp.TernaryCF(t == nil, func() *common.Timestamp { return nil }, func() *common.Timestamp { return common.NewTimestampP(t) })
 }
 
 func timestampToTime(t *common.Timestamp) *time.Time {
-	return fx.TernaryCF(t == nil, func() *time.Time { return nil }, func() *time.Time { return &t.Time })
+	return goxp.TernaryCF(t == nil, func() *time.Time { return nil }, func() *time.Time { return &t.Time })
 }
 
 func modelsToOrder(order *models.Order) *Order {
@@ -539,7 +539,7 @@ func modelsToOrder(order *models.Order) *Order {
 				NotBefore:   timeToTimestamp(order.NotBefore),
 				NotAfter:    timeToTimestamp(order.NotAfter),
 				Authz:       fx.Map(order.Authz, func(authz *models.Authz) string { return authz.ID }),
-				Certificate: fx.TernaryCF(order.Certificate == nil, func() string { return "" }, func() string { return order.Certificate.ID }),
+				Certificate: goxp.TernaryCF(order.Certificate == nil, func() string { return "" }, func() string { return order.Certificate.ID }),
 			},
 			ID: order.ID,
 		},
@@ -652,7 +652,7 @@ func modelToAuthz(authz *models.Authz) *Authz {
 		OrderID:    authz.OrderID,
 		Status:     acmeclient.AuthzStatus(authz.Status),
 		Expires:    common.NewTimestampP(authz.Expires),
-		Identifier: fx.TernaryCF(len(idents) > 0, func() common.Identifier { return idents[0] }, func() common.Identifier { return common.Identifier{} }),
+		Identifier: goxp.TernaryCF(len(idents) > 0, func() common.Identifier { return idents[0] }, func() common.Identifier { return common.Identifier{} }),
 		Challenges: fx.Map(authz.Challenges, func(ch *models.Challenge) *Challenge { return modelsToChallenge(ch) }),
 		Wildcard:   false,
 	}
@@ -696,7 +696,7 @@ func modelsToAuthz(authz *models.Authz) *Authz {
 		OrderID:    authz.OrderID,
 		Status:     acmeclient.AuthzStatus(authz.Status),
 		Expires:    common.NewTimestampP(authz.Expires),
-		Identifier: fx.TernaryCF(len(idents) > 0, func() common.Identifier { return idents[0] }, func() common.Identifier { return common.Identifier{} }),
+		Identifier: goxp.TernaryCF(len(idents) > 0, func() common.Identifier { return idents[0] }, func() common.Identifier { return common.Identifier{} }),
 		Challenges: fx.Map(authz.Challenges, func(ch *models.Challenge) *Challenge { return modelsToChallenge(ch) }),
 		Wildcard:   false,
 	}
@@ -848,7 +848,7 @@ func (s *sqlStoreImpl) CreateChallenge(ctx context.Context, chal *Challenge) (*C
 		Token:     chal.Token,
 		Status:    chal.Status.String(),
 		Validated: timestampToTime(chal.Validated),
-		Error:     fx.TernaryCF(chal.Error == nil, func() string { return "" }, func() string { return helper.MarshalJSON(chal.Error) }),
+		Error:     goxp.TernaryCF(chal.Error == nil, func() string { return "" }, func() string { return helper.MarshalJSON(chal.Error) }),
 	}
 	if tx := s.db.WithContext(ctx).Create(chalRef); tx.Error != nil {
 		return nil, gormx.ConvertSQLError(tx.Error)

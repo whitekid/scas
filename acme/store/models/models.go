@@ -19,7 +19,7 @@ func Migrate(db *gorm.DB) error {
 }
 
 // FIXME Name이 validate:required여서 &Project{}로 Update, Select할 때 오류가 난다. 그래서 dummy로 넣어주고있다.
-var DummyProject = &Project{Name: "dummpy", CommonName: "dummy"}
+var DummyProject = &Project{Name: "dummy", CommonName: "dummy"}
 
 type Project struct {
 	gorm.Model

@@ -1,0 +1,53 @@
+openapi: 3.0.0
+info:
+  title: sample service
+  version: v1alpha1
+tags:
+  - name: scas
+  - name: v1alpha1
+paths:
+  /scas/projects:
+    post:
+      tags:
+        - scas
+        - v1alpha1
+      operationId: Projects_create
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+    get:
+      tags:
+        - scas
+        - v1alpha1
+      operationId: Projects_list
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Project'
+                x-typespec-name: Project[]
+components:
+  schemas:
+    Project:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        created:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name

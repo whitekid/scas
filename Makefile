@@ -37,13 +37,14 @@ dep:
 
 	@$(MAKE) tidy
 
-	@go mod vendor
-
 tidy:
 	@go mod tidy -v
 
 docker:
 	docker build --pull --rm -t scas -f Dockerfile .
+
+pack:
+	pack build scas --buildpack paketo-buildpacks/go --builder paketobuildpacks/builder:base
 
 swag:
 	@swag init -d swagger api/v1alpha1/v1alpha1.go
