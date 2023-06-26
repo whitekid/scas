@@ -8,7 +8,7 @@ import "encoding/json"
 type RevokeReason int
 
 const (
-	RevokeUnspecified          RevokeReason = iota
+	RevokeUnspecified          RevokeReason = 0
 	RevokeKeyCompromise        RevokeReason = 1
 	RevokeCACompromise         RevokeReason = 2
 	RevokeAffiliationChanged   RevokeReason = 3

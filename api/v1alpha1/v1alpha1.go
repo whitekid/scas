@@ -275,7 +275,7 @@ func caToResource(ca *types.CertificateAuthority) (*v1alpha1.CertificateRequest,
 
 	return &v1alpha1.CertificateRequest{
 		ID:                 ca.ID,
-		CAID:               fx.TernaryCF(ca.CAID == nil, func() string { return "" }, func() string { return *ca.CAID }),
+		CAID:               goxp.TernaryCF(ca.CAID == nil, func() string { return "" }, func() string { return *ca.CAID }),
 		CommonName:         req.CommonName,
 		Country:            req.Country,
 		Province:           req.Province,
@@ -290,7 +290,7 @@ func caToResource(ca *types.CertificateAuthority) (*v1alpha1.CertificateRequest,
 		ExtKeyUsage:        req.ExtKeyUsage,
 		NotAfter:           req.NotAfter,
 		NotBefore:          req.NotBefore,
-		CRL:                fx.TernaryCF(len(req.CRL) > 0, func() string { return req.CRL[0] }, func() string { return "" }),
+		CRL:                goxp.TernaryCF(len(req.CRL) > 0, func() string { return req.CRL[0] }, func() string { return "" }),
 	}, nil
 }
 

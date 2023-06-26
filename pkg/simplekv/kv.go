@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/whitekid/goxp"
 	"github.com/whitekid/goxp/fx"
 )
 
@@ -48,7 +49,7 @@ func (m *memoryImpl[K, V]) Set(ctx context.Context, k K, v V, ttl time.Duration)
 
 	m.values[k] = &value[V]{
 		value:  v,
-		expire: fx.Ternary(ttl == 0, time.Time{}, time.Now().UTC().Add(ttl)),
+		expire: goxp.Ternary(ttl == 0, time.Time{}, time.Now().UTC().Add(ttl)),
 	}
 	return nil
 }

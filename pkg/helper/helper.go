@@ -1,40 +1,31 @@
 package helper
 
 import (
-	"context"
 	"crypto"
 	"hash"
 	"strconv"
-	"time"
 
 	"github.com/lithammer/shortuuid/v4"
-	"github.com/whitekid/goxp/fx"
+	"golang.org/x/exp/constraints"
 )
 
-func AtoiDef[T fx.Int](s string, def T) T {
+// depreciated: use goxp
+func AtoiDef[T constraints.Integer](s string, defValue T) T {
 	value, err := strconv.Atoi(s)
 	if err != nil {
-		return def
+		return defValue
 	}
 
 	return T(value)
 }
 
+// depreciated: use goxp
 func ParseBoolDef(s string, def bool) bool {
 	v, err := strconv.ParseBool(s)
 	if err != nil {
 		return def
 	}
 	return v
-}
-
-func After(ctx context.Context, d time.Duration, fn func()) {
-	select {
-	case <-ctx.Done():
-		return
-	case <-time.After(d):
-		fn()
-	}
 }
 
 func SHA256Sum(data []byte) []byte         { return Hash(crypto.SHA256.New(), data) }

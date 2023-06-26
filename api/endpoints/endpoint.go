@@ -28,7 +28,7 @@ func Endpoints() []Endpoint { return endpoints }
 //
 // TODO move to helper.Echo
 func Route(e *helper.Echo, endpoints ...Endpoint) {
-	fx.ForEach(endpoints, func(_ int, endpoint Endpoint) {
+	fx.Each(endpoints, func(_ int, endpoint Endpoint) {
 		path, name := endpoint.PathAndName()
 		log.Debugf("%s -> %s", path, name)
 		endpoint.Route(e.Group(path))

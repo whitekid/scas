@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/whitekid/goxp/fx"
+	"github.com/whitekid/goxp"
 
 	"scas/pkg/helper"
 	"scas/pkg/helper/x509x"
@@ -49,7 +49,7 @@ func (req *CreateRequest) Template() (*x509.Certificate, error) {
 
 	template := &x509.Certificate{
 		SignatureAlgorithm: req.SignatureAlgorithm,
-		SerialNumber:       fx.Ternary(req.SerialNumber == nil, x509x.RandomSerial(), req.SerialNumber),
+		SerialNumber:       goxp.Ternary(req.SerialNumber == nil, x509x.RandomSerial(), req.SerialNumber),
 		Subject: pkix.Name{
 			CommonName:         req.CommonName,
 			Country:            req.Country,
