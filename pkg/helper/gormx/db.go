@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/pkg/errors"
 	"github.com/whitekid/goxp"
 	"github.com/whitekid/goxp/log"
 	"gorm.io/driver/mysql"
@@ -39,12 +40,12 @@ func Open(dburl string, opts ...gorm.Option) (*gorm.DB, error) {
 	}
 
 	if dialector == nil {
-		panic(fmt.Sprintf("unsupported schme: %s", dburl))
+		return nil, errors.Errorf("unsupported schme: %s", dburl)
 	}
 
 	db, err := gorm.Open(dialector, opts...)
 	if err != nil {
-		panic(err)
+		return nil, errors.Wrap(err, "open failed")
 	}
 
 	switch u.Scheme {
@@ -67,6 +68,7 @@ func newMySQLDialector(u *url.URL) gorm.Dialector {
 	goxp.IfThen(queries.Get("charset") != "", func() { params.Set("charset", queries.Get("charset")) })
 	goxp.IfThen(queries.Get("parseTime") != "", func() { params.Set("parseTime", queries.Get("parseTime")) })
 	goxp.IfThen(queries.Get("loc") != "", func() { params.Set("loc", queries.Get("loc")) })
+	goxp.IfThen(queries.Get("tls") != "", func() { params.Set("tls", queries.Get("tls")) })
 
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)%s?%s", u.User.Username(), passwd, u.Hostname(), u.Port(), u.Path, params.Encode())
 
